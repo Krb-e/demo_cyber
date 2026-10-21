@@ -78,6 +78,7 @@ body::after{content:'';position:fixed;inset:0;
 .sec .l.r{background:var(--ke-bad)}
 .sec .t{font-size:10px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--ke-muted);flex:1}
 .pill{padding:3px 11px;border-radius:999px;font-size:10px;font-weight:600;letter-spacing:.04em;background:rgba(230,230,230,.06);color:var(--ke-soft);border:1px solid var(--ke-border);white-space:nowrap}
+.srcbadge{font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--ke-soft);background:rgba(230,230,230,.05);border:1px solid var(--ke-border);padding:3px 9px;border-radius:5px;white-space:nowrap;flex-shrink:0}
 
 /* CHIPS */
 .chip{display:inline-flex;align-items:center;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:2px 8px;border-radius:4px;border:1px solid;white-space:nowrap}
@@ -290,7 +291,7 @@ const OBJ_RITMO=0.326; // fracción ideal del evento ya transcurrida (día 2, 14
 /* ============ DATOS (ficticios) ============ */
 /* contextos: all = acumulado a la fecha · d1 = Lun 02 completo · d2 = Mar 03 hasta 14hs */
 const CTX={
-  all:{label:'Todo el evento · acumulado a la fecha', k:1,
+  all:{label:'Acumulado a la fecha', k:1,
     head:{fact:41.8,ord:574,ticket:72.8,cvr:1.62,ses:35400,usr:31800,invMeta:3.05,invGoogle:0.88,acos:9.4,
           cpcGoogle:0.21,cpm:5.4,factMeta:34.1,factGoogle:7.2,cpaMeta:6.3,cpaGoogle:8.3,acosMeta:9.4,acosGoogle:12.9,
           meliFact:11.8,meliRoas:8.1,meliAcos:12.4,meliVis:58400,meliCvr:3.4,
@@ -363,9 +364,40 @@ const SPRINT={
  ]
 };
 
+/* GA4 · páginas más visitadas */
+const PAGES=[['/ · Home',18420],['/cyber · Landing del evento',12640],['/productos · Listado',9870],['/p/serum-vitamina-c',5210],['/p/kit-skincare',3980],['/checkout',2130]];
+function pagesRows(k){const mx=Math.max(...PAGES.map(p=>p[1]));
+  return PAGES.map((p,i)=>{const col=i===0?'var(--ke-orange)':`rgba(230,230,230,${0.5-i*0.055})`;const v=sc(p[1],k);
+    return `<div class="brow"><div class="bl"><i style="background:${col}"></i>${p[0]}</div><div class="bt"><i style="width:${p[1]/mx*100}%;background:${col}"></i></div><div class="bv">${nf(v)}<small>vistas</small></div></div>`;}).join('');}
+
+/* productos más vendidos */
+const PRODSOLD=[['Serum Vitamina C 30ml',2120,8.9,13.5],['Kit Skincare Noche',980,6.4,9.7],['Protector Solar FPS50',1740,5.1,7.8],['Base Matte Larga Duración',1310,4.2,6.4],['Máscara Pestañas Volumen',2450,3.3,5.0]];
+
+/* sprint review por área (accionables de corto plazo) */
+const AREASPR={
+ consul:[
+  {d:'Hoy · 03 Nov',s:'Las publicaciones con Ads concentran el 42% de la facturación con ACOS 12,4%.',ac:'Subir la puja en las 3 publicaciones Top y pausar las de ACOS > 20%.',im:'+6% de ventas con el mismo presupuesto.'},
+  {d:'Ayer · 02 Nov',s:'La reputación quedó en verde y el tiempo de respuesta bajó a 2 hs.',ac:'Sostener respuestas < 4 hs durante los picos de 20 a 23 hs.',im:'Mantener la posición en la búsqueda de Meli.'}
+ ],
+ social:[
+  {d:'Hoy · 03 Nov',s:'Los reels de urgencia duplican el engagement promedio.',ac:'Dos historias con cuenta regresiva entre las 20 y las 23 hs.',im:'+ alcance orgánico en el pico de la noche.'},
+  {d:'Ayer · 02 Nov',s:'El carrusel de beneficios del Cyber fue el posteo más guardado.',ac:'Reversionar como reel con el top 3 de productos.',im:'+ guardados y tráfico a la tienda.'}
+ ],
+ email:[
+  {d:'Hoy · 03 Nov',s:'La campaña de apertura explicó el 40% de la facturación atribuida.',ac:'Reenvío a no-abridores a las 19 hs con asunto nuevo.',im:'+0,6 M de facturación atribuida.'},
+  {d:'Ayer · 02 Nov',s:'La atribución a email (9,2%) viene por debajo del objetivo de 12%.',ac:'Sumar un flujo de carrito abandonado con cupón del Cyber.',im:'+2 pp de atribución a email.'}
+ ]
+};
+function areaSprint(area){const items=AREASPR[area]||[];
+  return `<div class="sec"><div class="l"></div><span class="t">Sprint review del área · últimos cortes</span><span class="pill">Accionables de corto plazo</span></div>
+  <div class="acc">${items.map(it=>`<div class="accc"><div class="at">● ${it.d}</div>
+    <div class="arow"><div class="al">Estatus</div><div class="av">${it.s}</div></div>
+    <div class="arow"><div class="al">Accionable</div><div class="av">${it.ac}</div></div>
+    <div class="arow"><div class="al">Impacto esperado</div><div class="av">${it.im}</div></div></div>`).join('')}</div>`;}
+
 /* ============ ESTADO ============ */
 const state={tab:'overview',day:'all'};
-const TABS=[['overview','Overview'],['tienda','Tienda'],['paid','Paid Media'],['consul','Consultoría'],['social','Social Media'],['email','Email Mkt'],['sprint','Sprint Review']];
+const TABS=[['overview','Overview'],['tienda','Tienda'],['paid','Paid Media'],['email','Email Mkt'],['consul','Consultoría'],['social','Social Media'],['sprint','Sprint Review']];
 const TITLES={overview:['Resumen general','OVER<span>VIEW</span>'],sprint:['Sprint review por corte','SPRINT <span>REVIEW</span>'],tienda:['Comportamiento de tienda','TIEN<span>DA</span>'],paid:['Pauta','PAID <span>MEDIA</span>'],consul:['Mercado Libre','CONSUL<span>TORÍA</span>'],social:['Redes sociales','SOCIAL <span>MEDIA</span>'],email:['Email marketing','E<span>MAIL</span>']};
 
 /* ============ HELPERS ============ */
@@ -398,7 +430,7 @@ function head(){
   const D=dayState();
   document.getElementById('eyebrow').textContent=TITLES[state.tab][0]+' · '+D.dayLabel;
   document.getElementById('ptitle').innerHTML=TITLES[state.tab][1];
-  const comp = state.day==='all'?'comparado vs. Cyber Monday 2025 al mismo corte':'comparado vs. mismo día de CM25';
+  const comp = state.day==='all'?'vs. Cyber Monday 2025 (mismo corte)':'vs. Cyber Monday 2025 (mismo día)';
   document.getElementById('pctx').innerHTML=`<b>Marca Demo</b> · Cyber Monday 2026 · ${D.future?('día aún no transcurrido · comienza el '+D.dm+'/11'):D.label} · ${comp}`;
   const src=UPDS.map(u=>`${u[0].split(' ')[0]} ${u[1]}`).join(' · ');
   document.getElementById('upd').innerHTML=`<i></i>Última actualización del dato: <b>hoy 14:05 hs</b> &nbsp;·&nbsp; ${src}`;
@@ -462,10 +494,10 @@ function ovTab(D){
     ${objRow('Inversión Meta',h.invMeta,OBJ.invMeta,M)}
     ${objRow('Inversión Google',h.invGoogle,OBJ.invGoogle,M)}
   </div>
-  <div class="sec"><div class="l"></div><span class="t">Tienda · resumen</span><span class="pill">Tiendanube</span></div>
+  <div class="sec"><div class="l"></div><span class="t">Tienda · resumen</span><span class="srcbadge">Tiendanube</span></div>
   <div class="kgrid kg4">
     ${kc('Facturación Tiendanube',M(h.fact),dlt(d.fact)+' vs CM25',1)}
-    ${kc('Ticket promedio',K(h.ticket),dlt(d.ticket)+' vs CM25')}
+    ${kc('Ticket promedio',K(h.ticket),'nominal · '+dlt(32)+' vs CM25 · IPC +29%')}
     ${kc('Tasa de conversión',pc(h.cvr,2),dlt(d.cvr,true)+' vs CM25')}
     ${kc('Órdenes',nf(h.ord),dlt(d.ord)+' vs CM25')}
   </div>
@@ -473,7 +505,7 @@ function ovTab(D){
   <div class="chart"><div class="ch"><span class="ct">Facturación por día</span>
     <div class="legend"><span><i style="background:#ff700a"></i>Facturación CM26</span><span><i style="background:rgba(230,230,230,.14);border:1px solid rgba(230,230,230,.3)"></i>Objetivo del día</span></div></div>
     <div id="daily"></div></div>
-  <div class="sec"><div class="l"></div><span class="t">Distribución de usuarios por fuente</span><span class="pill">${nf(sc(h.usr,1))} usuarios · GA4</span></div>
+  <div class="sec"><div class="l"></div><span class="t">Distribución de sesiones por fuente</span><span class="pill">${nf(sc(h.ses,1))} sesiones · GA4</span></div>
   ${srcBars(D)}
   <div class="sec"><div class="l"></div><span class="t">ACOS general del evento</span></div>
   <div class="bigstat"><div><div class="bl">ACOS general</div><div class="bv">${pc(h.acos)}</div></div>
@@ -498,17 +530,15 @@ function tiTab(D){
     <div class="bt"><i style="width:${g[3]/geoMax*100}%;background:${col}"></i></div>
     <div class="bv">${M(g[3]*k)}<small>${pc(g[4],0)} · ${nf(sc(g[1],k))} ses.</small></div></div>`;}).join('');
   return `
-  <div class="sec"><div class="l"></div><span class="t">Comportamiento de la tienda · KPIs</span><span class="pill">Upgrade datos Tiendanube</span></div>
+  <div class="sec"><div class="l"></div><span class="t">Comportamiento de la tienda · KPIs</span><span class="pill">Upgrade de datos</span><span class="srcbadge">Tiendanube</span></div>
   <div class="kgrid kg4">
     ${kc('Facturación',M(h.fact),dlt(D.deltas.fact)+' vs CM25',1)}
     ${kc('Órdenes',nf(h.ord),dlt(D.deltas.ord)+' vs CM25')}
     ${kc('Sesiones',nf(h.ses),'Usuarios '+nf(h.usr))}
     ${kc('Conversión',pc(h.cvr,2),dlt(D.deltas.cvr,true)+' vs CM25')}
   </div>
-  <div class="sec"><div class="l"></div><span class="t">Facturación por hora · ${D.today?'hoy':D.dayLabel}</span><span class="pill">Actualización horaria</span></div>
-  <div class="chart"><div class="ch"><span class="ct">Facturación por hora · 00 a 23 hs</span>
-    <div class="legend"><span><i style="background:#ff700a"></i>Real</span><span><i style="background:rgba(230,230,230,.16)"></i>Proyección</span><span><i style="background:rgba(79,163,255,.5)"></i>CM25</span></div></div>
-    <div id="hourly"></div></div>
+  <div class="sec"><div class="l"></div><span class="t">Páginas más visitadas</span><span class="pill">GA4 · pageviews</span></div>
+  <div class="blk" style="padding:20px 22px"><div class="bars">${pagesRows(k)}</div></div>
   <div class="sec"><div class="l"></div><span class="t">Funnel de la tienda · de la sesión a la compra</span><span class="pill">Tiendanube + GA4</span></div>
   <div class="blk" style="padding:20px 22px"><div class="funnel">${funnelHtml}</div></div>
   <div class="note"><div class="ni">i</div><p>La mayor caída está entre <strong>ver producto y agregar al carrito</strong>. En CM25 ese paso convertía 3 pp mejor: hay oportunidad en la ficha de producto (reviews, stock visible, cuotas arriba del precio).</p></div>
@@ -516,9 +546,13 @@ function tiTab(D){
   <div class="blk"><div class="blkh"><span class="blkt">Top productos por vistas</span><span class="blkt">Datos de tienda · demo</span></div>
     <div class="scroll"><table class="t"><thead><tr><th>#</th><th>Producto</th><th class="n">Vistas</th><th class="n">Al carrito</th><th class="n">Compras</th><th class="n">Conv.</th><th class="n">Facturación</th></tr></thead>
     <tbody>${prodRows}</tbody></table></div></div>
+  <div class="sec"><div class="l"></div><span class="t">Productos más vendidos</span><span class="pill">Por facturación</span></div>
+  <div class="blk"><div class="blkh"><span class="blkt">Top productos vendidos</span><span class="blkt">Datos de tienda · demo</span></div>
+    <div class="scroll"><table class="t"><thead><tr><th>#</th><th>Producto</th><th class="n">Unidades</th><th class="n">Facturación</th><th class="n">% del total</th></tr></thead>
+    <tbody>${PRODSOLD.map((p,i)=>`<tr class="${i===0?'top':''}"><td class="rk">${i+1}</td><td class="nm">${p[0]}</td><td class="n">${nf(sc(p[1],k))}</td><td class="n hi">${M(p[2]*k)}</td><td class="n">${pc(p[3],1)}</td></tr>`).join('')}</tbody></table></div></div>
   <div class="sec"><div class="l"></div><span class="t">Geolocalización · facturación por provincia</span><span class="pill">AMBA + interior</span></div>
   <div class="blk" style="padding:20px 22px"><div class="bars">${geoRows}</div></div>
-  <div class="sec"><div class="l"></div><span class="t">Distribución de usuarios por fuente</span><span class="pill">${nf(h.usr)} usuarios · GA4</span></div>
+  <div class="sec"><div class="l"></div><span class="t">Distribución de sesiones por fuente</span><span class="pill">${nf(h.ses)} sesiones · GA4</span></div>
   ${srcBars(D)}`;
 }
 
@@ -539,9 +573,9 @@ function paTab(D){
   return `
   <div class="bigstat"><div><div class="bl">ACOS general · Paid</div><div class="bv">${pc(h.acos)}</div></div>
     <div class="bd">Meta + Google. Inversión <b style="color:var(--ke-text)">${M(h.invMeta+h.invGoogle)}</b> · facturación atribuida <b style="color:var(--ke-text)">${M(h.factMeta+h.factGoogle)}</b> · ROAS ${nf((h.factMeta+h.factGoogle)/(h.invMeta+h.invGoogle),1)}x.</div></div>
-  <div class="sec"><div class="l"></div><span class="t">Inversión · Meta Ads</span><span class="pill">Advantage+ · DPA · TOF</span></div>
+  <div class="sec"><div class="l"></div><span class="t">Inversión · Meta Ads</span><span class="srcbadge">Meta</span></div>
   <div class="kgrid kg5">${mt.map(x=>kc(x[0],x[1],'')).join('')}</div>
-  <div class="sec"><div class="l"></div><span class="t">Inversión · Google Ads</span><span class="pill">PMax · Search · Shopping</span></div>
+  <div class="sec"><div class="l"></div><span class="t">Inversión · Google Ads</span><span class="srcbadge">Google Ads</span></div>
   <div class="kgrid kg5">${gg.map(x=>kc(x[0],x[1],'')).join('')}</div>
   <div class="sec"><div class="l"></div><span class="t">Mejores anuncios · Meta Ads</span><span class="pill">Ranking por valor de compras · sin creativo</span></div>
   <div class="ads">${adHtml}</div>
@@ -575,7 +609,16 @@ function coTab(D){
   <div class="sec"><div class="l"></div><span class="t">Publicaciones destacadas</span><span class="pill">Sin título de publicación · demo</span></div>
   <div class="blk"><div class="blkh"><span class="blkt">Top publicaciones por facturación</span><span class="blkt">Mercado Libre · demo</span></div>
     <div class="scroll"><table class="t"><thead><tr><th>#</th><th></th><th>Publicación</th><th class="n">Visitas</th><th class="n">Ventas</th><th class="n">Conv.</th><th class="n">Facturación</th></tr></thead>
-    <tbody>${[['Publicación demo A',18400,312,1.70,4.9],['Publicación demo B',12600,208,1.65,3.1],['Publicación demo C',9800,156,1.59,2.2],['Publicación demo D',7200,98,1.36,1.6]].map((p,i)=>`<tr class="${i===0?'top':''}"><td class="rk">${i+1}</td><td class="tcell">${thumb(i+13,'ml',44)}</td><td class="nm">${p[0]}</td><td class="n">${nf(sc(p[1],D.k))}</td><td class="n">${nf(sc(p[2],D.k))}</td><td class="n">${pc(p[3])}</td><td class="n hi">${M(p[4]*D.k)}</td></tr>`).join('')}</tbody></table></div></div>`;
+    <tbody>${[['Publicación demo A',18400,312,1.70,4.9],['Publicación demo B',12600,208,1.65,3.1],['Publicación demo C',9800,156,1.59,2.2],['Publicación demo D',7200,98,1.36,1.6]].map((p,i)=>`<tr class="${i===0?'top':''}"><td class="rk">${i+1}</td><td class="tcell">${thumb(i+13,'ml',44)}</td><td class="nm">${p[0]}</td><td class="n">${nf(sc(p[1],D.k))}</td><td class="n">${nf(sc(p[2],D.k))}</td><td class="n">${pc(p[3])}</td><td class="n hi">${M(p[4]*D.k)}</td></tr>`).join('')}</tbody></table></div></div>
+  <div class="sec"><div class="l"></div><span class="t">Mix de ventas y operación</span><span class="pill">Ads vs orgánico</span></div>
+  <div class="kgrid kg4">
+    ${kc('Ventas con Ads',M(h.meliFact*0.42),'42% del total',1)}
+    ${kc('Ventas orgánicas',M(h.meliFact*0.58),'58% · sin costo de pauta')}
+    ${kc('CPA Product Ads',K(6.8),dlt(-4.2,true)+' vs CM25')}
+    ${kc('Reputación','Verde','Respuesta < 2 hs')}
+  </div>
+  <div class="note"><div class="ni">i</div><p>Corto plazo: las <strong>3 publicaciones Top</strong> con Ads concentran el 42% de la facturación. Subir la puja ahí y pausar las de ACOS &gt; 20% libera presupuesto para el pico de la noche.</p></div>
+  ${areaSprint('consul')}`;
 }
 
 /* ---- SOCIAL ---- */
@@ -589,11 +632,18 @@ function soTab(D){
     ${kc('Seguidores nuevos','+'+nf(h.seg),'En el evento')}
     ${kc('Fact. orgánica',M(h.orgFact),'Atribuida · ya en tienda')}
   </div>
+  <div class="sec"><div class="l"></div><span class="t">Contenido publicado</span><span class="pill">Posteos e historias</span></div>
+  <div class="kgrid kg4">
+    ${kc('Posteos',nf(sc(14,D.k)),'Feed + reels',1)}
+    ${kc('Historias',nf(sc(42,D.k)),'Con stickers de link')}
+    ${kc('Reels',nf(sc(8,D.k)),'El formato de mayor alcance')}
+    ${kc('Guardados',nf(sc(3950,D.k)),'Señal de intención de compra')}
+  </div>
   <div class="sec"><div class="l"></div><span class="t">Mejores posteos</span><span class="pill">Sin creativo ni copy · demo</span></div>
   <div class="blk"><div class="blkh"><span class="blkt">Top posteos por interacciones</span><span class="blkt">Instagram · demo</span></div>
     <div class="scroll"><table class="t"><thead><tr><th>#</th><th></th><th>Posteo</th><th class="n">Formato</th><th class="n">Alcance</th><th class="n">Interacciones</th><th class="n">ER</th></tr></thead>
     <tbody>${[['Posteo demo #1','Reel',128400,8900,6.9],['Posteo demo #2','Carrusel',96200,5100,5.3],['Posteo demo #3','Reel',84100,4200,5.0],['Posteo demo #4','Historia',61800,2600,4.2]].map((p,i)=>`<tr class="${i===0?'top':''}"><td class="rk">${i+1}</td><td class="tcell">${thumb(i+7,kindOf(p[1]),44)}</td><td class="nm">${p[0]}</td><td class="n" style="color:var(--ke-muted)">${p[1]}</td><td class="n">${nf(sc(p[2],D.k))}</td><td class="n hi">${nf(sc(p[3],D.k))}</td><td class="n">${pc(p[4])}</td></tr>`).join('')}</tbody></table></div></div>
-  <div class="note"><div class="ni">i</div><p>Los <strong>reels de urgencia</strong> ("últimas horas del Cyber") duplican el engagement promedio. Para los días pico: historias con cuenta regresiva entre las 20 y las 23 hs.</p></div>`;
+  ${areaSprint('social')}`;
 }
 
 /* ---- EMAIL ---- */
@@ -608,6 +658,12 @@ function emTab(D){
     ${kc('Campañas enviadas',nf(h.mailEnv),'En el evento')}
     ${kc('Contactos activos',nf(h.mailCont),'Base del evento')}
   </div>
+  <div class="kgrid kg4">
+    ${kc('CTOR',pc(8.7),'Clicks sobre aperturas')}
+    ${kc('Órdenes por email',nf(sc(66,D.k)),'Atribuidas')}
+    ${kc('Desuscriptos',pc(0.3,1),'Dentro de lo sano')}
+    ${kc('Rebote',pc(1.2,1),'Lista saludable')}
+  </div>
   <div class="sec"><div class="l"></div><span class="t">Objetivo de atribución</span><span class="pill">Meta 12% de la tienda</span></div>
   <div class="objc" style="max-width:520px"><div class="oh"><span class="on">% atribución a email</span><span class="op ${avPct>=100?'ok':''}">${pc(h.mailPct)}</span></div>
     <div class="track"><div class="fill" style="width:${Math.min(100,avPct)}%"></div><div class="ideal" style="left:100%"></div></div>
@@ -615,7 +671,8 @@ function emTab(D){
   <div class="sec"><div class="l"></div><span class="t">Campañas del evento</span><span class="pill">Sin asunto ni copy · demo</span></div>
   <div class="blk"><div class="blkh"><span class="blkt">Envíos por performance</span><span class="blkt">Perfit · demo</span></div>
     <div class="scroll"><table class="t"><thead><tr><th>#</th><th>Campaña</th><th class="n">Envíos</th><th class="n">Open rate</th><th class="n">CTR</th><th class="n">Fact. atrib.</th></tr></thead>
-    <tbody>${[['Campaña demo · Apertura Cyber',46200,31.2,3.4,2.1],['Campaña demo · Favoritos',44800,24.6,2.2,1.4],['Campaña demo · Últimas horas',43100,22.1,1.9,0.9],['Campaña demo · Reenvío no-abridores',21400,18.4,1.6,0.4]].map((p,i)=>`<tr class="${i===0?'top':''}"><td class="rk">${i+1}</td><td class="nm">${p[0]}</td><td class="n">${nf(sc(p[1],D.k))}</td><td class="n">${pc(p[2])}</td><td class="n">${pc(p[3])}</td><td class="n hi">${M(p[4]*D.k)}</td></tr>`).join('')}</tbody></table></div></div>`;
+    <tbody>${[['Campaña demo · Apertura Cyber',46200,31.2,3.4,2.1],['Campaña demo · Favoritos',44800,24.6,2.2,1.4],['Campaña demo · Últimas horas',43100,22.1,1.9,0.9],['Campaña demo · Reenvío no-abridores',21400,18.4,1.6,0.4]].map((p,i)=>`<tr class="${i===0?'top':''}"><td class="rk">${i+1}</td><td class="nm">${p[0]}</td><td class="n">${nf(sc(p[1],D.k))}</td><td class="n">${pc(p[2])}</td><td class="n">${pc(p[3])}</td><td class="n hi">${M(p[4]*D.k)}</td></tr>`).join('')}</tbody></table></div></div>
+  ${areaSprint('email')}`;
 }
 
 /* ---- SRC bars (reusable) ---- */
@@ -624,7 +681,7 @@ function srcBars(D){
   return `<div class="blk" style="padding:20px 22px"><div class="bars">${SRC.map((s,i)=>{const col=i===0?'var(--ke-orange)':`rgba(230,230,230,${0.5-i*0.045})`;
     return `<div class="brow"><div class="bl"><i style="background:${col}"></i>${s[0]}</div>
     <div class="bt"><i style="width:${s[1]/max*100}%;background:${col}"></i></div>
-    <div class="bv">${pc(s[1])}<small>${nf(sc(D.head.usr*s[1]/100,1))} usr</small></div></div>`;}).join('')}</div></div>`;
+    <div class="bv">${pc(s[1])}<small>${nf(sc(D.head.ses*s[1]/100,1))} ses</small></div></div>`;}).join('')}</div></div>`;
 }
 
 /* ---- CHARTS ---- */
