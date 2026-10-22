@@ -359,15 +359,15 @@ const kindOf=f=>/video|reel/i.test(f)?'video':/carru|cat[aá]logo|dpa|colecci/i.
 const SPRINT={
  d1:[
   {h:10,items:[]},
-  {h:14,items:[{a:'Paid Media',s:'Advantage+ sostuvo el ROAS por encima de 11.',ac:'Escalar 20% el presupuesto de la campaña de promo.',im:'+8% de facturación con el mismo ACOS.'}]},
-  {h:18,items:[{a:'Tienda',s:'Caída fuerte entre ver producto y agregar al carrito.',ac:'Sumar reviews, stock visible y cuotas en la ficha de producto.',im:'+3 pp de tasa de add-to-cart.'}]},
-  {h:22,items:[{a:'Email',s:'El envío de apertura del Cyber explicó el 40% de la facturación atribuida.',ac:'Dejar programado para mañana el reenvío a no-abridores de las 19 hs.',im:'+0,6 M de facturación atribuida.'}]}
+  {h:14,items:[{a:'Paid Media',s:'A las 14:00, con el 45% del día transcurrido según la curva de CM25, Advantage+ Shopping (promo Cyber −40%) rinde un ROAS de 11,3 contra un objetivo de 8,0, con ACOS de 8,9% por debajo del límite del 11%. El 62% del valor de compras se concentra en los 3 anuncios de catálogo dinámico; el CPM subió 14% vs la media de octubre por la competencia en el feed, pero el CTR se sostiene en 1,3% y el costo por compra está en $6,1k.',ac:'Escalar 20% el presupuesto diario de Advantage+ (de $180k a $216k) y reasignar $40k de campañas TOF a Catálogo DPA para el pico de 20 a 23 hs, con tope de ACOS en 11%.',im:'+8% de facturación atribuida, mismo ACOS.'}]},
+  {h:18,items:[{a:'Tienda',s:'El funnel de Tiendanube muestra la mayor fuga entre ver producto y agregar al carrito: de 24.780 vistas de producto solo 6.372 suman al carrito (−74%), 3 pp peor que el mismo tramo de CM25. La ficha no muestra las cuotas sin interés arriba del precio y el 28% de las sesiones móviles abandona antes de ver el stock disponible; el ticket promedio se mantiene en $72,8k.',ac:'Mover el badge de cuotas sin interés arriba del precio y mostrar stock en tiempo real en la ficha; test A/B al 50% del tráfico móvil desde las 19:00.',im:'+3 pp de tasa de add-to-cart.'}]},
+  {h:22,items:[{a:'Email',s:'El envío de apertura del Cyber (46.200 destinatarios) explicó el 40% de la facturación atribuida a email del día, con 31,2% de open rate y 3,4% de CTR, muy por encima del promedio de la cuenta (22% / 1,8%). Los 31.800 no-abridores quedaron sin segundo impacto y el flujo de carrito abandonado todavía no está activo para la promo del evento.',ac:'Dejar programado para mañana a las 19:00 el reenvío a no-abridores con asunto nuevo y activar el flujo de carrito abandonado con cupón CYBER10.',im:'+0,6 M de facturación atribuida.'}]}
  ],
  d2:[
   {h:10,items:[]},
   {h:14,items:[
-    {a:'Paid · Google',s:'El costo por compra subió por competencia en genéricas del Cyber.',ac:'Pausar keywords con CPA > 2x promedio y reforzar PMax con señales.',im:'-12% en el CPA de Google.'},
-    {a:'Social Media',s:'Los reels de urgencia duplican el engagement promedio.',ac:'Historias con cuenta regresiva entre las 20 y las 23 hs.',im:'+ alcance orgánico en el pico de la noche.'}
+    {a:'Paid · Google',s:'En el corte de las 14:00 el costo por compra de Google subió a $8,7k (+9% vs ayer) por la competencia en keywords genéricas del Cyber, con un CPC medio de $230 (+18%). PMax mantiene un ROAS de 6,1 pero las campañas de Search genéricas arrastran el promedio: 4 keywords concentran el 35% del gasto con CPA mayor a 2x el promedio y conversión por debajo del 1%.',ac:'Pausar las 4 keywords con CPA > 2x promedio, bajar 15% la puja en genéricas y reforzar PMax con la señal de audiencia de compradores de CM25.',im:'−12% en el CPA de Google.'},
+    {a:'Social Media',s:'Los reels de urgencia ("últimas horas del Cyber") acumulan un ER de 6,9% y duplican el engagement del feed (3,4%); el reel del día 1 generó 1.820 guardados y 940 compartidos y derivó 12% más de tráfico a la tienda que un carrusel equivalente. Las historias con sticker de link tienen 2,1% de tasa de clic, por encima del benchmark de 1,4%.',ac:'Publicar 2 historias con cuenta regresiva entre las 20:00 y las 23:00 y reversionar el reel top del día 1 con el top 3 de productos más vendidos.',im:'+ alcance orgánico en el pico.'}
   ]}
  ]
 };
@@ -408,16 +408,16 @@ function postCard(p,i,D){const [fmt,alc,inter,er,guard,comp]=p;
 /* sprint review por área (accionables de corto plazo) */
 const AREASPR={
  consul:[
-  {d:'Hoy · 03 Nov',s:'Las publicaciones con Ads concentran el 42% de la facturación con ACOS 12,4%.',ac:'Subir la puja en las 3 publicaciones Top y pausar las de ACOS > 20%.',im:'+6% de ventas con el mismo presupuesto.'},
-  {d:'Ayer · 02 Nov',s:'La reputación quedó en verde y el tiempo de respuesta bajó a 2 hs.',ac:'Sostener respuestas < 4 hs durante los picos de 20 a 23 hs.',im:'Mantener la posición en la búsqueda de Meli.'}
+  {d:'Hoy · 03 Nov',s:'Las publicaciones con Ads concentran el 42% de la facturación de Mercado Libre con un ACOS de 12,4% (objetivo 10%). Las 3 publicaciones Top explican el 28% de las ventas, pero 2 de ellas pican un ACOS por encima del 20% por pujas automáticas sin tope. La reputación está en verde y el tiempo de respuesta bajó a 2 hs.',ac:'Subir 15% la puja de las 3 publicaciones Top y pasar las 2 de ACOS > 20% a puja manual con tope de 14%.',im:'+6% de ventas, mismo presupuesto.'},
+  {d:'Ayer · 02 Nov',s:'El tiempo de respuesta a preguntas bajó a 2 hs y la reputación se mantiene en verde, lo que sostiene la posición en los primeros resultados de Meli. En los picos de 20 a 23 hs las preguntas sin responder treparon a 40 por hora, por encima de la capacidad del equipo de guardia.',ac:'Sumar un turno de respuesta en el pico de 20 a 23 hs para sostener respuestas en menos de 4 hs.',im:'Mantener la posición en búsqueda.'}
  ],
  social:[
-  {d:'Hoy · 03 Nov',s:'Los reels de urgencia duplican el engagement promedio.',ac:'Dos historias con cuenta regresiva entre las 20 y las 23 hs.',im:'+ alcance orgánico en el pico de la noche.'},
-  {d:'Ayer · 02 Nov',s:'El carrusel de beneficios del Cyber fue el posteo más guardado.',ac:'Reversionar como reel con el top 3 de productos.',im:'+ guardados y tráfico a la tienda.'}
+  {d:'Hoy · 03 Nov',s:'Los reels de urgencia del Cyber promedian un ER de 6,9% contra 3,4% del feed habitual; el reel del día 1 sumó 1.820 guardados y 940 compartidos y derivó 12% más de clics a la tienda que un carrusel. El alcance de no-seguidores llegó al 41%, señal de que el algoritmo está distribuyendo el contenido fuera de la base de seguidores.',ac:'Publicar 2 historias con cuenta regresiva entre las 20:00 y las 23:00 y pautar el reel top con $25k para amplificar el pico.',im:'+ alcance orgánico en el pico.'},
+  {d:'Ayer · 02 Nov',s:'El carrusel de beneficios del Cyber fue el posteo más guardado del día (1.240 guardados) pero su ER (5,3%) quedó por debajo de los reels; el formato estático rinde para guardar pero convierte menos a tráfico inmediato. El 58% de las interacciones vino de seguidores, con poca distribución orgánica fuera de la base.',ac:'Reversionar el carrusel como reel de 15 segundos con las 3 piezas top y CTA a la tienda.',im:'+ guardados y tráfico a la tienda.'}
  ],
  email:[
-  {d:'Hoy · 03 Nov',s:'La campaña de apertura explicó el 40% de la facturación atribuida.',ac:'Programar para mañana 19 hs el reenvío a no-abridores con asunto nuevo.',im:'+0,6 M de facturación atribuida.'},
-  {d:'Ayer · 02 Nov',s:'La atribución a email (~9,6%) viene por debajo del objetivo de 12%.',ac:'Sumar un flujo de carrito abandonado con cupón del Cyber.',im:'+2 pp de atribución a email.'}
+  {d:'Hoy · 03 Nov',s:'La campaña de apertura del Cyber (46.200 envíos) explicó el 40% de la facturación atribuida a email, con 31,2% de open rate y 3,4% de CTR, muy por encima del promedio de la cuenta (22% / 1,8%). Los 31.800 no-abridores quedaron sin segundo impacto y el flujo de carrito abandonado aún no está activo para la promo del evento.',ac:'Programar para mañana a las 19:00 el reenvío a no-abridores con asunto nuevo y activar el flujo de carrito abandonado con cupón CYBER10.',im:'+0,6 M de facturación atribuida.'},
+  {d:'Ayer · 02 Nov',s:'La atribución a email cerró en ~9,6% de la facturación de la tienda, por debajo del objetivo de 12%. El canal depende de 2 envíos masivos y no tiene flujos automatizados (bienvenida, carrito, post-compra) corriendo durante el evento, que en CM25 aportaron 3 pp adicionales de atribución.',ac:'Activar el flujo de carrito abandonado con cupón CYBER10 y un post-compra con cross-sell durante el evento.',im:'+2 pp de atribución a email.'}
  ]
 };
 function areaSprint(area){const items=AREASPR[area]||[];
@@ -428,7 +428,7 @@ function areaSprint(area){const items=AREASPR[area]||[];
     <div class="arow"><div class="al">Impacto esperado</div><div class="av">${it.im}</div></div></div>`).join('')}</div>`;}
 
 /* ============ ESTADO ============ */
-const state={tab:'overview',day:'all',postsN:5};
+const state={tab:'overview',day:'all',postsN:5,postsFilter:'all'};
 const TABS=[['overview','Overview'],['tienda','Tienda'],['paid','Paid Media'],['email','Email Mkt'],['social','Social Media'],['sprint','Sprint Review']];
 const TITLES={overview:['Resumen general','OVER<span>VIEW</span>'],sprint:['Sprint review por corte','SPRINT <span>REVIEW</span>'],tienda:['Comportamiento de tienda','TIEN<span>DA</span>'],paid:['Pauta','PAID <span>MEDIA</span>'],consul:['Mercado Libre','CONSUL<span>TORÍA</span>'],social:['Redes sociales','SOCIAL <span>MEDIA</span>'],email:['Email marketing','E<span>MAIL</span>']};
 
@@ -680,8 +680,8 @@ function soTab(D){
     ${kc('Compartidos',nf(sc(2100,D.k)),'Alcance amplificado')}
   </div>
   <div class="sec"><div class="l"></div><span class="t">Mejores posteos</span><span class="pill">Formato tipo demo · sin creativo</span></div>
-  <div class="postsel">Mostrar <span>top ${state.postsN}</span> &middot; ${[5,6,7,8,9,10].map(n=>`<button class="pbtn ${state.postsN===n?'on':''}" data-posts="${n}">${n}</button>`).join('')}</div>
-  <div class="ads">${POSTS.slice(0,state.postsN).map((p,i)=>postCard(p,i,D)).join('')}</div>
+  <div class="postsel"><span>Top</span><button class="pbtn ${state.postsN===5?'on':''}" data-posts="5">5</button><button class="pbtn ${state.postsN===10?'on':''}" data-posts="10">10</button><span style="margin-left:16px">Tipo</span>${[['all','Todos'],['feed','Feed'],['stories','Historias']].map(x=>`<button class="pbtn ${state.postsFilter===x[0]?'on':''}" data-filter="${x[0]}">${x[1]}</button>`).join('')}</div>
+  <div class="ads">${POSTS.filter(p=>state.postsFilter==='all'?true:state.postsFilter==='stories'?p[0]==='Historia':p[0]!=='Historia').slice(0,state.postsN).map((p,i)=>postCard(p,i,D)).join('')}</div>
   ${areaSprint('social')}`;
 }
 
@@ -780,7 +780,7 @@ function drawHourly(box,D){
 document.addEventListener('click',e=>{
   const tb=e.target.closest('.tab'); if(tb){state.tab=tb.dataset.tab;render();window.scrollTo({top:0,behavior:'smooth'});return;}
   const dp=e.target.closest('.daypill'); if(dp){state.day=dp.dataset.day;render();return;}
-  const pb=e.target.closest('.pbtn'); if(pb){state.postsN=+pb.dataset.posts;render();return;}
+  const pb=e.target.closest('.pbtn'); if(pb){if(pb.dataset.posts)state.postsN=+pb.dataset.posts;else if(pb.dataset.filter)state.postsFilter=pb.dataset.filter;render();return;}
 });
 render();
 
