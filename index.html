@@ -243,7 +243,29 @@ table.t{width:100%;border-collapse:collapse;min-width:680px}
   .kg4,.kg5{grid-template-columns:1fr 1fr}.kg3{grid-template-columns:1fr}.obj{grid-template-columns:1fr}.acc{grid-template-columns:1fr}
   .bigstat{flex-direction:column;align-items:flex-start;gap:10px}
 }
-@media(max-width:560px){.kg4,.kg5,.kg2{grid-template-columns:1fr}.srcs{grid-template-columns:1fr}}
+@media(max-width:700px){
+  .ke-nav{flex-wrap:wrap;padding:6px 14px;gap:10px}
+  .navspace{display:none}
+  .live{margin-left:auto}
+  .tabbar{order:5;width:100%;overflow-x:auto;scrollbar-width:none;border-top:1px solid var(--ke-border)}
+  .tabbar::-webkit-scrollbar{display:none}
+  .tab{padding:12px 13px}
+  .dayfilter{position:static;top:auto;margin-top:20px}
+}
+@media(max-width:560px){
+  .kg4,.kg5,.kg3{grid-template-columns:1fr 1fr}
+  .kg2{grid-template-columns:1fr}
+  .srcs{grid-template-columns:1fr}
+  .admetrics{grid-template-columns:repeat(2,1fr)}
+  .kc{padding:14px 14px;min-height:88px}
+  .kc .kl{font-size:8.5px;letter-spacing:.1em}
+  .sec{margin:26px 0 13px}
+  .brow .bl em{display:none}
+  .navlogo .navsub{display:none}
+  .cyberbadge img{height:30px}
+  .ke-wrap{padding:0 12px 32px}
+}
+@media(max-width:380px){.kg4,.kg5,.kg3{grid-template-columns:1fr}.admetrics{grid-template-columns:1fr}}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
