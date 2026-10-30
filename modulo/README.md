@@ -12,6 +12,7 @@ Tablero de evento reutilizable para los sellers de la agencia. Se sirve en `{cli
 # desde la raíz de este repo (demo_cyber), que tiene el index.html del molde:
 node modulo/build_evento.js index.html modulo/event_module.js <salida>/evento/index.html <PREFIX> "<CLIENTE_KEY>" [true|false]
 node modulo/patch_meli.js <salida>/evento/index.html   # si el seller tiene Mercado Libre
+node modulo/patch_meli_only.js <salida>/evento/index.html   # además, si el seller es SÓLO Mercado Libre (sin tienda ni Meta/Google)
 # el último arg es GA4_PAID_ONLY (default false): true sólo para sellers sin Tiendanube ni planilla de ventas (p. ej. Famusic)
 # ej Wanama:  node modulo/build_evento.js index.html modulo/event_module.js ../wanamakids/evento/index.html wanamakids "wanama kids"
 ```
@@ -25,7 +26,7 @@ Una fila por cliente. Columnas: `cliente, nombre, badge_texto, fecha_inicio, fec
 - **Paid Media**: `{prefix}_meta_ads` + `{prefix}_google_ads` (ambas con `select=*`; atribución Google/cpc desde el store por source_medium). Si no hay filas de Google en la ventana, todo lo de Google se oculta y el ACOS/avance queda sólo con Meta.
 - **Mercado Libre** (con `patch_meli.js`): `{prefix}_ml_orders` (pago aprobado: bruta, órdenes, ticket, unidades, comisión, envío, cupones, neta; canceladas aparte), `{prefix}_mercado_ads` (Product Ads) + `{prefix}_mercado_ads_display` (Display, atribución por touch point directo; se piden sólo filas con costo, impresiones o venta), `{prefix}_ml_items` (top 10 por unidades vendidas del último snapshot; no depende del día) y `{prefix}_ml_cuenta` (reputación). Objetivos de `objetivos_ml` con `fecha='cyber-monday-2026'` si hay. Paginación con desempate por clave natural (order_id / campaign_id / line_item_id), así anda en tablas sin `id`. El Overview muestra MeLi **aparte** ("canal aparte, no suma a la facturación de la tienda") con la suma tienda + MeLi rotulada.
   - Sin visitas ni conversión a propósito: `{prefix}_ml_visitas_snapshot` no es un acumulado (baja entre días y la resta da conversiones de 30% a más de 100%) e `item_visits` tampoco cierra (publicaciones top con 0 visitas). Además anon no puede leer `_ml_visitas_snapshot`.
-  - Sellers sólo MeLi (Ohpic, Prifamon, Superclick): la pestaña funciona sola; Overview y Tienda siguen pensados para tienda propia.
+  - Sellers sólo MeLi (Ohpic, Prifamon, Superclick): después de `patch_meli.js` va `patch_meli_only.js`. El Overview pasa a ser la pestaña Mercado Libre (la pestaña MeLi aparte se oculta); Tienda y Paid Media se ocultan si no tienen filas; los objetivos salen de `objetivos_consultoria` con `fecha='cyber-monday-2026'` (facturación, inversión Product Ads / Display, pill con ACOS y TACOS límite) cuando `objetivos_ml` no tiene fila; "Último dato cargado" suma órdenes ML y Mercado Ads. La fila de `eventos` lleva `obj_facturacion` y `acos_limite` de consultoría y nada en Meta/Google.
 - **Email Mkt**: `{prefix}_email_marketing` (Perfit); la pestaña aparece si el seller tiene email; sin envíos en el período muestra un aviso con el último envío.
 - **Social**: `{prefix}_ig_posts_media` + `{prefix}_ig_stories` (como Historias) / `_ig_account_daily`.
 - **Sprint Review**: `{prefix}_insights` (Notion), por semana y área; las filas sin `semana` no entran.
