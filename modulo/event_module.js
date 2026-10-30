@@ -102,7 +102,7 @@ async function loadData(){
   const pFrom=iso(addDays(fi,-len)), pTo=iso(addDays(fi,-1)); // período anterior comparable
   const tTo=E_cur+'T23:59:59';
   try{
-    const [rev,ga4,tn,meta,google,ma,mlo,igPosts,igacc,ins,igSt,gev,gitems,em,fc]=await Promise.all([
+    const [rev,ga4,tn,meta,google,ma,mlo,igPosts,igacc,ins,igSt,gev,gitems,em,fc,emLast]=await Promise.all([
       sb(T('revenue'),'date,source_medium,purchase_revenue,transactions,sessions,total_users,add_to_carts','date',pFrom,E_cur),
       sb(T('ga4_sessions'),'date,source_medium,total_users,sessions,transactions,total_revenue','date',pFrom,E_cur),
       sb(T('tiendanube_orders'),'date,order_payment_status,order_total_paid,order_total_products','date',pFrom,E_cur),
@@ -119,11 +119,12 @@ async function loadData(){
       // GA4 detallado (no todos los sellers lo tienen: si la tabla falta da 404 y el funnel cae a revenue/add_to_carts)
       sb(T('ga4_events'),'date,event_name,sessions','date',pFrom,E_cur),
       sb(T('ga4_items'),'date,item_name,items_viewed,items_added_to_cart,items_purchased,item_revenue','date',S_cur,E_cur),
-      // email marketing (campañas): si la tabla falta o no hay envíos en el evento, la pestaña Email se oculta.
-      // * : campaign_subject (asunto) no lo tienen todos los sellers
+      // email marketing (campañas). * : campaign_subject (asunto) no lo tienen todos los sellers
       sb(T('email_marketing'),'*','date',pFrom,E_cur),
       // facturación diaria propia (sellers sin Tiendanube con planilla de ventas): si la tabla falta da 404 y se ignora
-      sb(T('facturacion'),'date,venta_real,pedidos','date',pFrom,E_cur)
+      sb(T('facturacion'),'date,venta_real,pedidos','date',pFrom,E_cur),
+      // último envío de email (cualquier fecha): la pestaña Email se muestra si el seller tiene email, aunque no haya envíos en el evento
+      fetch(SUPABASE_URL+'/rest/v1/'+T('email_marketing')+'?select=date,campaign_name&order=date.desc&limit=1',{headers:HDR}).then(r=>r.ok?r.json():[]).catch(()=>[])
     ]);
     // historias (tabla aparte) como posteos tipo STORY: entran al filtro "Historias" de Social
     const ig=igPosts.concat(igSt.map(s=>({...s,media_product_type:'STORY',saved:0,likes:0,comments:0,follows_from_post:s.follows})));
@@ -150,7 +151,8 @@ async function loadData(){
     HAS.meli = DATA.mlo.length>0 || ma.length>0;
     HAS.social = ig.length>0 || igacc.length>0;
     HAS.sprint = DATA.ins.length>0;
-    HAS.email = inWin(em,'date',S_cur,E_cur).length>0;   // sólo si hubo envíos durante el evento
+    DATA.emLast = emLast[0]||null;
+    HAS.email = em.length>0 || !!DATA.emLast;   // si el seller tiene email; sin envíos en el evento la pestaña muestra un aviso
     HAS.emailInsights = DATA.ins.some(i=>/mail/i.test(i.area||''));
     HAS.paidInsights = DATA.ins.some(i=>/paid/i.test(i.area||''));
     HAS.consulInsights = DATA.ins.some(i=>/consul/i.test(i.area||''));
@@ -464,6 +466,13 @@ function coTab(D){
 /* ---- EMAIL ---- */
 function emTab(D){
   const h=D;
+  if(!h.mailEnv){
+    const lst=DATA.emLast, cuando=state.day==='all'?'en el evento':'este día';
+    return `${secH('Email marketing · Perfit','Sin envíos '+cuando)}
+  <div class="empty"><div class="ei">✉️</div><h4>Todavía no hubo envíos de email ${cuando}</h4>
+  <p>La pestaña se completa sola cuando salga la primera campaña.${lst?` Último envío: <b style="color:var(--ke-orange)">${esc(lst.campaign_name||'campaña')}</b> el ${fmtD(lst.date)}.`:''}</p></div>
+  ${HAS.emailInsights?areaSprint('email','Email'):''}`;
+  }
   const mpct=h.fact?h.mailFact/h.fact*100:0;
   const camps=(h._rowsEm||[]).slice().sort((a,b)=>(+b.conversions_amount||0)-(+a.conversions_amount||0));
   const rows=camps.map((c,i)=>{const del=+c.delivered||0;const subj=String(c.campaign_subject||'').replace(/^asunto:\s*/i,'');
