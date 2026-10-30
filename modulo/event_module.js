@@ -1,6 +1,6 @@
 /* =====================================================================
    MÓDULO DE EVENTO · Krab-e (Cyber / Hot Sale) · config-driven
-   Único edit por cliente: PREFIX + CLIENTE_KEY. Todo lo demás sale de
+   Único edit por cliente: PREFIX + CLIENTE_KEY (+ GA4_PAID_ONLY), que pone el build. Todo lo demás sale de
    Supabase (tabla `eventos` para config/objetivos + tablas {prefix}_*).
    Los logos (Meta/Google/Mercado) se inyectan en build como const L.
    ===================================================================== */
@@ -10,6 +10,21 @@ const SUPABASE_URL="https://yixbnmwdzexjygmtszii.supabase.co";
 const SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlpeGJubXdkemV4anlnbXRzemlpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE5NzE5NjMsImV4cCI6MjA5NzU0Nzk2M30.W6ID6GDrY3kvDwNzjfPCcnkIsmFbcFm_YwhuraGAEo4";
 const HDR={apikey:SUPABASE_ANON_KEY,Authorization:'Bearer '+SUPABASE_ANON_KEY};
 const T=n=>PREFIX+'_'+n;
+const TN_STATUS=['paid','partially_refunded']; // estados de Tiendanube que cuentan como facturación (igual que el dashboard común)
+// Sin Tiendanube (p. ej. Famusic): facturación, órdenes y conversión salen de GA4 y SÓLO de paid media, con el mismo
+// criterio que el dashboard común. Paid = el MEDIO es cpc|ppc|paid|paid_social|display (google / cpc, ig · fb · an · th / paid…).
+// Es atribución de GA4 a pauta, no el total de la tienda: no coincide con el L10 a propósito.
+const GA4_PAID_ONLY=__GA4_PAID_ONLY__;   // build: true sólo para sellers sin Tiendanube ni planilla de ventas
+// Sellers sin Tiendanube con planilla de ventas (p. ej. El Burgués): la facturación y las órdenes salen de {prefix}_facturacion
+// (venta_real, pedidos), con el mismo criterio que el dashboard común (suma de venta_real / pedidos; conversión =
+// pedidos / sesiones GA4 de todo el sitio). Es diaria: sin desglose por hora. Los días sin cargar quedan en "—".
+const FX=(h,s)=>h.factNone?'—':s;
+const PAID_RE=/\/\s*(cpc|ppc|paid|paid_social|display)\s*$/i;
+const esPaid=x=>PAID_RE.test((x.source_medium||'').trim());
+const isPaidSrc=h=>h.factSrc==='GA4 paid';
+const factLbl=h=>isPaidSrc(h)?'Facturación (GA4 · paid)':'Facturación';
+const ordLbl=h=>isPaidSrc(h)?'Órdenes (GA4 · paid)':'Órdenes';
+const factPill=(h,def)=>isPaidSrc(h)?'Atribuida a pauta (GA4)':def;
 
 /* ============ FORMATO ============ */
 const nf=(n,d=0)=>Number(n||0).toLocaleString('es-AR',{minimumFractionDigits:d,maximumFractionDigits:d});
@@ -28,12 +43,14 @@ const DOW=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
 
 /* ============ FETCH SUPABASE ============ */
 async function sb(table,cols,dateCol,from,to){
-  let out=[],off=0;const pg=1000;
+  let out=[],off=0,tie=true;const pg=1000;
   for(;;){
     let url=SUPABASE_URL+'/rest/v1/'+table+'?select='+encodeURIComponent(cols)+'&limit='+pg+'&offset='+off;
     if(dateCol&&from) url+='&'+dateCol+'=gte.'+from+'&'+dateCol+'=lte.'+to;
-    if(dateCol) url+='&order='+dateCol+'.asc';
+    // desempate por id: con >1000 filas y fechas repetidas, offset sin orden único duplica/saltea filas entre páginas
+    if(dateCol) url+='&order='+dateCol+'.asc'+(tie?',id.asc':'');
     let r; try{ r=await fetch(url,{headers:HDR}); }catch(e){console.warn('[KE] '+table+' fetch error',e);return out;}
+    if(r.status===400&&tie&&dateCol&&off===0){tie=false;continue;}   // tabla sin columna id: se pide sin desempate
     if(!r.ok){console.warn('[KE] '+table+' '+r.status+' — fuente ignorada');return out;}
     const rows=await r.json(); out=out.concat(rows);
     if(rows.length<pg) break; off+=pg;
@@ -41,6 +58,8 @@ async function sb(table,cols,dateCol,from,to){
   return out;
 }
 const S=(a,f)=>a.reduce((s,x)=>s+(parseFloat(f(x))||0),0);
+// CTR de Meta por fila: si la columna ctr viene vacía (ETL sin CTR), se calcula con clicks/impresiones
+const ctrOf=x=>{const c=parseFloat(x.ctr);if(isFinite(c))return c;const i=+x.impressions||0;return i?(+x.clicks||0)/i*100:0;};
 
 /* ============ ESTADO + CONFIG ============ */
 let CFG=null;                 // fila de eventos
@@ -48,8 +67,8 @@ let DATA={};                  // crudo por tabla
 let DAYS=[];                  // [{k:'YYYY-MM-DD', dow, dm, avail}]
 let CTX={};                   // {all:{head,deltas}, 'YYYY-MM-DD':{...}}
 let OBJ={}, RITMO=0, LASTTS='';
-const state={tab:'overview',day:'all',postsN:5,postsFilter:'all'};
-const HAS={tienda:true,paid:true,meli:false,social:false,sprint:false,email:false};
+const state={tab:'overview',day:'all',postsN:5,postsFilter:'all',itemsSort:'v'};
+const HAS={tienda:true,paid:true,google:true,meli:false,social:false,sprint:false,email:false};
 
 /* ============ CARGA ============ */
 async function boot(){
@@ -83,36 +102,57 @@ async function loadData(){
   const pFrom=iso(addDays(fi,-len)), pTo=iso(addDays(fi,-1)); // período anterior comparable
   const tTo=E_cur+'T23:59:59';
   try{
-    const [rev,ga4,tn,meta,google,ma,mlo,ig,igacc,ins]=await Promise.all([
+    const [rev,ga4,tn,meta,google,ma,mlo,igPosts,igacc,ins,igSt,gev,gitems,em,fc]=await Promise.all([
       sb(T('revenue'),'date,source_medium,purchase_revenue,transactions,sessions,total_users,add_to_carts','date',pFrom,E_cur),
       sb(T('ga4_sessions'),'date,source_medium,total_users,sessions,transactions,total_revenue','date',pFrom,E_cur),
       sb(T('tiendanube_orders'),'date,order_payment_status,order_total_paid,order_total_products','date',pFrom,E_cur),
-      sb(T('meta_ads'),'date,campaign_name,amount_spent,impressions,reach,frequency,landing_page_views,website_purchases,purchases_conv_value,website_adds_to_cart,video_view_3s,ctr,cpm','date',pFrom,E_cur),
-      sb(T('google_ads'),'date,campaign_name,cost,impressions,clicks,avg_cpc,ctr,search_impression_share','date',pFrom,E_cur),
+      sb(T('meta_ads'),'*',   // * : no todos los sellers tienen clicks/ctr; una columna faltante da 400 y se pierde Meta entero
+      'date',pFrom,E_cur),
+      sb(T('google_ads'),'*',   // * : no todos los sellers tienen ctr/search_impression_share; una columna faltante da 400 y se pierde Google entero
+      'date',pFrom,E_cur),
       sb(T('mercado_ads'),'fecha,campaign_name,cost,impressions,clicks,total_amount,units_quantity,campaign_acos_target','fecha',pFrom,E_cur),
       sb(T('ml_orders'),'order_date_created,order_status,order_payment_status,order_total_amount,order_total_quantity','order_date_created',pFrom,tTo),
       sb(T('ig_posts_media'),'date_published,media_type,media_product_type,permalink,thumbnail_url,caption,reach,total_interactions,saved,shares,likes,comments,follows_from_post,views','date_published',S_cur,tTo),
       sb(T('ig_account_daily'),'fecha,account_reach,account_views,account_total_interactions,account_shares,account_saves,account_comments','fecha',pFrom,E_cur),
-      sb(T('insights'),'semana,area,estatus,accionable,impacto_esperado,resumen,resultado,responsable',null)
+      sb(T('insights'),'semana,area,estatus,accionable,impacto_esperado,resumen,resultado,responsable',null),
+      sb(T('ig_stories'),'date_published,media_type,media_product_type,permalink,caption,reach,views,total_interactions,shares,follows','date_published',S_cur,tTo),
+      // GA4 detallado (no todos los sellers lo tienen: si la tabla falta da 404 y el funnel cae a revenue/add_to_carts)
+      sb(T('ga4_events'),'date,event_name,sessions','date',pFrom,E_cur),
+      sb(T('ga4_items'),'date,item_name,items_viewed,items_added_to_cart,items_purchased,item_revenue','date',S_cur,E_cur),
+      // email marketing (campañas): si la tabla falta o no hay envíos en el evento, la pestaña Email se oculta
+      sb(T('email_marketing'),'date,campaign_name,sent,delivered,opened,clicked,bounced,unsubscribed,conversions,conversions_amount','date',pFrom,E_cur),
+      // facturación diaria propia (sellers sin Tiendanube con planilla de ventas): si la tabla falta da 404 y se ignora
+      sb(T('facturacion'),'date,venta_real,pedidos','date',pFrom,E_cur)
     ]);
+    // historias (tabla aparte) como posteos tipo STORY: entran al filtro "Historias" de Social
+    const ig=igPosts.concat(igSt.map(s=>({...s,media_product_type:'STORY',saved:0,likes:0,comments:0,follows_from_post:s.follows})));
     // store = revenue (purchase_revenue + add_to_carts) por fecha; si una fecha
     // no tiene revenue cargado (ETL parcial del día en curso), se usa GA4 total_revenue.
     const revByDate={}; rev.forEach(r=>{revByDate[r.date]=(revByDate[r.date]||0)+(parseFloat(r.purchase_revenue)||0);});
     const goodRev=new Set(Object.keys(revByDate).filter(d=>revByDate[d]>0));
     const mapGa4=g=>({date:g.date,source_medium:g.source_medium,purchase_revenue:g.total_revenue,transactions:g.transactions,sessions:g.sessions,total_users:g.total_users,add_to_carts:null});
     const store=rev.filter(r=>goodRev.has(r.date)).concat(ga4.filter(g=>!goodRev.has(g.date)).map(mapGa4));
-    const tnPaid=tn.filter(o=>o.order_payment_status==='paid');
-    DATA={store,tn:tnPaid,meta,google,ma,mlo:mlo.filter(o=>o.order_payment_status==='approved'),ig,igacc,ins};
+    const tnPaid=tn.filter(o=>TN_STATUS.includes((o.order_payment_status||'').toLowerCase()));
+    const FN_EV=['session_start','view_item','add_to_cart','begin_checkout','purchase'];
+    DATA={store,tn:tnPaid,meta,google,ma,mlo:mlo.filter(o=>o.order_payment_status==='approved'),ig,igacc,ins:ins.filter(r=>r.semana),   // insights sin semana: no entran al Sprint Review
+      gev:gev.filter(e=>FN_EV.includes(e.event_name)),gitems,em};
     DATA._win={S_cur,E_cur,pFrom,pTo,fi,ff,endData,today};
     // facturación real de la tienda (Tiendanube) si hay datos en la ventana del evento; si no, atribución GA4/revenue
+    // filas con venta cargada (la planilla trae el mes entero con venta_real vacía en los días por venir)
+    DATA.fc = fc.filter(r=>r.venta_real!=null&&r.venta_real!=='');
+    DATA._hasFact = DATA.fc.length>0;
+    DATA._lastFact = DATA.fc.map(r=>r.date).sort().slice(-1)[0]||'';
     DATA._hasTN = tnPaid.some(o=>{const d=(o.date||'').slice(0,10);return d>=S_cur&&d<=E_cur;});
 
     // disponibilidad de secciones
+    HAS.google = google.length>0;   // sin filas de Google en la ventana: se oculta todo lo de Google (no se muestra en 0)
     HAS.meli = DATA.mlo.length>0 || ma.length>0;
     HAS.social = ig.length>0 || igacc.length>0;
-    HAS.sprint = ins.length>0;
-    HAS.paidInsights = ins.some(i=>/paid/i.test(i.area||''));
-    HAS.consulInsights = ins.some(i=>/consul/i.test(i.area||''));
+    HAS.sprint = DATA.ins.length>0;
+    HAS.email = inWin(em,'date',S_cur,E_cur).length>0;   // sólo si hubo envíos durante el evento
+    HAS.emailInsights = DATA.ins.some(i=>/mail/i.test(i.area||''));
+    HAS.paidInsights = DATA.ins.some(i=>/paid/i.test(i.area||''));
+    HAS.consulInsights = DATA.ins.some(i=>/consul/i.test(i.area||''));
 
     buildDays(); buildCtx(); buildRitmo();
     LASTTS = maxDataTs();
@@ -141,19 +181,24 @@ function headFor(a,b){
   const tn=inWin(DATA.tn,'date',a,b);
   const useTN=DATA._hasTN;
   const factTN=S(tn,x=>x.order_total_paid), ordTN=tn.length;
-  const factStore=S(st,x=>x.purchase_revenue), ordStore=S(st,x=>x.transactions);
-  const fact=useTN?factTN:factStore, ord=useTN?ordTN:ordStore, factSrc=useTN?'Tiendanube':'GA4';
-  const ses=S(st,x=>x.sessions), usr=S(st,x=>x.total_users), atc=S(st,x=>x.add_to_carts);
+  const paidOnly=GA4_PAID_ONLY&&!useTN, stF=paidOnly?st.filter(esPaid):st;   // fact/órdenes/conversión: sólo paid (sesiones y fuentes: todo el sitio)
+  const factStore=S(stF,x=>x.purchase_revenue), ordStore=S(stF,x=>x.transactions);
+  const fc=inWin(DATA.fc||[],'date',a,b), useFact=!useTN&&DATA._hasFact, factNone=useFact&&!fc.length;
+  const fact=useTN?factTN:useFact?S(fc,x=>x.venta_real):factStore, ord=useTN?ordTN:useFact?S(fc,x=>x.pedidos):ordStore,
+        factSrc=useTN?'Tiendanube':useFact?'Ventas':(paidOnly?'GA4 paid':'GA4');
+  const ses=S(st,x=>x.sessions), usr=S(st,x=>x.total_users), atc=S(st,x=>x.add_to_carts), sesF=S(stF,x=>x.sessions);
   // meta
   const invMeta=S(mt,x=>x.amount_spent), factMeta=S(mt,x=>x.purchases_conv_value), compMeta=S(mt,x=>x.website_purchases),
         imprMeta=S(mt,x=>x.impressions), lpvMeta=S(mt,x=>x.landing_page_views), v3=S(mt,x=>x.video_view_3s),
-        ctrMw=imprMeta?S(mt,x=>(parseFloat(x.ctr)||0)*(parseFloat(x.impressions)||0))/imprMeta:0,
+        ctrMw=imprMeta?S(mt,x=>ctrOf(x)*(parseFloat(x.impressions)||0))/imprMeta:0,
         freqMw=S(mt,x=>x.reach)?S(mt,x=>(parseFloat(x.frequency)||0)*(parseFloat(x.reach)||0))/S(mt,x=>x.reach):0;
   // google
   const invGoogle=S(gg,x=>x.cost), imprG=S(gg,x=>x.impressions);
   let gCl=S(gg,x=>x.clicks); if(!gCl)gCl=gg.reduce((s,x)=>{const c=+x.cost||0,a=+x.avg_cpc||0;return s+(a?c/a:0);},0);
   const ctrGw=imprG?gCl/imprG*100:0;  // google ctr col viene como fracción; lo derivamos de clics/impresiones
-  const isGw=S(gg,x=>x.impressions)?S(gg,x=>(parseFloat(x.search_impression_share)||0)*(parseFloat(x.impressions)||0))/imprG:0;
+  // IS ponderado sólo sobre filas que lo traen; Detrics lo manda como fracción (0–1) → se pasa a %
+  const isV=x=>{const v=parseFloat(x.search_impression_share);return v<=1?v*100:v;}, ggIS=gg.filter(x=>isFinite(parseFloat(x.search_impression_share))), imprIS=S(ggIS,x=>x.impressions);
+  const isGw=imprIS?S(ggIS,x=>isV(x)*(parseFloat(x.impressions)||0))/imprIS:0;
   // facturación atribuida por canal (desde store, por source_medium)
   const gcpc=st.filter(x=>/google\s*\/\s*cpc/i.test(x.source_medium||''));
   const factGoogle=S(gcpc,x=>x.purchase_revenue), ordGoogle=S(gcpc,x=>x.transactions);
@@ -163,16 +208,29 @@ function headFor(a,b){
   // social
   const alc=S(ig,x=>x.reach)||S(iga,x=>x.account_reach), inter=S(ig,x=>x.total_interactions)||S(iga,x=>x.account_total_interactions),
         saved=S(ig,x=>x.saved), shares=S(ig,x=>x.shares), follows=S(ig,x=>x.follows_from_post), nposts=ig.length;
+  // funnel GA4: sesiones que dispararon cada evento de ecommerce
+  const ge=inWin(DATA.gev||[],'date',a,b), evS=n=>S(ge.filter(x=>x.event_name===n),x=>x.sessions);
+  const fnSes=evS('session_start'), fnView=evS('view_item'), fnAtc=evS('add_to_cart'), fnChk=evS('begin_checkout'), fnBuy=evS('purchase');
+  // productos GA4: GA4 reporta por variante 'NOMBRE (COLOR, TALLE)'; se agrupa por producto
+  const itBy={}; inWin(DATA.gitems||[],'date',a,b).forEach(x=>{const k=(x.item_name||'').trim().replace(/\s*\([^()]*\)$/,'')||'(sin nombre)';const o=itBy[k]||(itBy[k]={n:k,v:0,c:0,p:0,r:0});
+    o.v+=+x.items_viewed||0;o.c+=+x.items_added_to_cart||0;o.p+=+x.items_purchased||0;o.r+=+x.item_revenue||0;});
+  const items=Object.values(itBy).filter(o=>o.v||o.p);
+  // email: tasas recalculadas desde los conteos (open/CTR sobre entregados, CTOR sobre aperturas, rebote sobre enviados)
+  const em=inWin(DATA.em||[],'date',a,b), mSent=S(em,x=>x.sent), mDel=S(em,x=>x.delivered), mOpen=S(em,x=>x.opened), mClk=S(em,x=>x.clicked);
+  const mailFact=S(em,x=>x.conversions_amount), mailOrd=S(em,x=>x.conversions), mailEnv=em.length;
   return {
-    fact,ord,factSrc,ticket:ord?fact/ord:0,ses,usr,atc,cvr:ses?ord/ses*100:0,
+    fact,ord,factSrc,factNone,ticket:ord?fact/ord:0,ses,usr,atc,cvr:sesF?ord/sesF*100:0,
     invMeta,factMeta,cpaMeta:compMeta?invMeta/compMeta:0,acosMeta:factMeta?invMeta/factMeta*100:0,
     cpmMeta:imprMeta?invMeta/imprMeta*1000:0,ctrM:ctrMw,freqM:freqMw,compMeta,imprMeta,lpvMeta,
-    hookM:imprMeta?v3/imprMeta*100:0,cvM:lpvMeta?invMeta/lpvMeta:0,crM:lpvMeta?compMeta/lpvMeta*100:0,
+    hookM:imprMeta?v3/imprMeta*100:0,v3Ok:mt.some(x=>x.video_view_3s!=null),cvM:lpvMeta?invMeta/lpvMeta:0,crM:lpvMeta?compMeta/lpvMeta*100:0,
     invGoogle,factGoogle,ordGoogle,cpaGoogle:ordGoogle?invGoogle/ordGoogle:0,acosGoogle:factGoogle?invGoogle/factGoogle*100:0,
     cpcGoogle:gCl?invGoogle/gCl:0,imprG,ctrG:ctrGw,isG:isGw,
     inv:invMeta+invGoogle,acos:fact?(invMeta+invGoogle)/fact*100:0,
     meliFact,meliOrd,meliInvAds,meliFactAds,meliRoas:meliInvAds?meliFactAds/meliInvAds:0,meliAcos:meliFactAds?meliInvAds/meliFactAds*100:0,meliImpr,meliClk,
     alc,inter,er:alc?inter/alc*100:0,saved,shares,follows,nposts,
+    fnSes,fnView,fnAtc,fnChk,fnBuy,_items:items,
+    mailFact,mailOrd,mailEnv,mailSent:mSent,mailDel:mDel,mailOr:mDel?mOpen/mDel*100:0,mailCtr:mDel?mClk/mDel*100:0,mailCtor:mOpen?mClk/mOpen*100:0,
+    mailBounce:mSent?S(em,x=>x.bounced)/mSent*100:0,mailUnsub:mDel?S(em,x=>x.unsubscribed)/mDel*100:0,_rowsEm:em,
     _rowsMeta:mt,_rowsGoogle:gg,_rowsMa:ma,_rowsIg:ig,_store:st
   };
 }
@@ -197,11 +255,12 @@ function maxDataTs(){
 }
 
 /* ============ NAV / DAY FILTER ============ */
-const TABS_ALL=[['overview','Overview','tienda:true'],['tienda','Tienda'],['paid','Paid Media'],['meli','Mercado Libre'],['social','Social'],['sprint','Sprint Review']];
-const TITLES={overview:['Resumen general','OVER<span>VIEW</span>'],tienda:['Comportamiento de tienda','TIEN<span>DA</span>'],paid:['Pauta','PAID <span>MEDIA</span>'],meli:['Mercado Libre','MERCADO <span>LIBRE</span>'],social:['Redes sociales','SOCIAL <span>MEDIA</span>'],sprint:['Sprint review','SPRINT <span>REVIEW</span>']};
+const TABS_ALL=[['overview','Overview','tienda:true'],['tienda','Tienda'],['paid','Paid Media'],['email','Email Mkt'],['meli','Mercado Libre'],['social','Social'],['sprint','Sprint Review']];
+const TITLES={overview:['Resumen general','OVER<span>VIEW</span>'],tienda:['Comportamiento de tienda','TIEN<span>DA</span>'],paid:['Pauta','PAID <span>MEDIA</span>'],email:['Email marketing','EMAIL <span>MKT</span>'],meli:['Mercado Libre','MERCADO <span>LIBRE</span>'],social:['Redes sociales','SOCIAL <span>MEDIA</span>'],sprint:['Sprint review','SPRINT <span>REVIEW</span>']};
 function visibleTabs(){
   return TABS_ALL.filter(t=>{
     if(t[0]==='meli')return HAS.meli;
+    if(t[0]==='email')return HAS.email;
     if(t[0]==='social')return HAS.social;
     if(t[0]==='sprint')return HAS.sprint;
     return true;
@@ -236,7 +295,7 @@ function head(){
   const nombreCliente=titleCase(CLIENTE_KEY);
   const periodo=state.day==='all'?`${fmtD(DATA._win.S_cur)} – ${fmtD(DATA._win.E_cur)}`:D.dayLabel;
   document.getElementById('pctx').innerHTML=`<b>${nombreCliente}</b> · ${CFG.nombre} · ${D.future?('día aún no transcurrido · comienza el '+D.dm):periodo} · vs. período anterior equivalente`;
-  document.getElementById('upd').innerHTML=`<i></i>Último dato cargado: <b>${fmtD(LASTTS)}</b> &nbsp;·&nbsp; datos reales desde Supabase`;
+  document.getElementById('upd').innerHTML=`<i></i>Último dato cargado: <b>${fmtD(LASTTS)}</b>${DATA._hasFact?` · ventas hasta <b>${fmtD(DATA._lastFact)}</b>`:''} &nbsp;·&nbsp; datos reales desde Supabase`;
 }
 function fmtD(s){if(!s)return '—';const d=parseISO(s.slice(0,10));return d.getDate()+'/'+(d.getMonth()+1);}
 
@@ -249,7 +308,7 @@ function render(){
   const D=dayState();
   const el=document.getElementById('content');
   if(D.future){el.innerHTML=emptyTab(D);return;}
-  el.innerHTML=({overview:ovTab,tienda:tiTab,paid:paTab,meli:coTab,social:soTab,sprint:spTab})[state.tab](D);
+  el.innerHTML=({overview:ovTab,tienda:tiTab,paid:paTab,email:emTab,meli:coTab,social:soTab,sprint:spTab})[state.tab](D);
   drawCharts(D);
 }
 function emptyTab(D){return `<div class="empty"><div class="ei">🕓</div><h4>${D.dow} ${D.dm} — este día todavía no transcurrió</h4>
@@ -273,24 +332,26 @@ function ovTab(D){
   const roas=h.inv?h.fact/h.inv:0;
   const objAll=state.day==='all';
   return `
-  <div class="bigstat"><div><div class="bl">ACOS general del evento</div><div class="bv">${pc(h.acos)}</div></div>
-    <div class="bd">Inversión total <b style="color:var(--ke-text)">${M(h.inv)}</b> · facturación <b style="color:var(--ke-text)">${M(h.fact)}</b> · ROAS ${nf(roas,1)}x${OBJ.acosLim?` · límite objetivo ${pc(OBJ.acosLim)}`:''}.</div></div>
+  <div class="bigstat"><div><div class="bl">ACOS general del evento</div><div class="bv">${FX(h,pc(h.acos))}</div></div>
+    <div class="bd">Inversión total <b style="color:var(--ke-text)">${M(h.inv)}</b> · ${isPaidSrc(h)?'facturación atribuida a pauta (GA4)':'facturación'} <b style="color:var(--ke-text)">${FX(h,M(h.fact))}</b> · ROAS ${FX(h,nf(roas,1)+'x')}${OBJ.acosLim?` · límite objetivo ${pc(OBJ.acosLim)}`:''}.</div></div>
+  ${isPaidSrc(h)?`<div class="note"><div class="ni">i</div><p>${titleCase(CLIENTE_KEY)} no tiene Tiendanube: la <strong>facturación</strong>, las <strong>órdenes</strong> y la <strong>conversión</strong> son las que <strong>GA4 atribuye a pauta</strong> (google / cpc + ig · fb · an · th / paid), con el mismo criterio que el dashboard común. No es el total de la tienda ni coincide con el L10. GA4 carga por día: no hay desglose por hora.</p></div>`:''}
+  ${h.factSrc==='Ventas'?`<div class="note"><div class="ni">i</div><p>La <strong>facturación</strong> y las <strong>órdenes</strong> salen de la <strong>planilla de ventas diaria</strong> de ${titleCase(CLIENTE_KEY)}, la misma que usa el dashboard común. Es un dato por día: no hay desglose por hora y se carga con uno o dos días de demora. Los días todavía sin cargar se muestran en “—”.</p></div>`:''}
   ${objAll?`${secH('Objetivos del evento · avance','Ritmo ideal '+nf(RITMO*100,0)+'%')}
   <div class="obj">
-    ${objRow('Facturación',h.fact,OBJ.fact,M)}
-    ${objRow('Órdenes',h.ord,OBJ.ord,v=>nf(v))}
+    ${objRow(factLbl(h),h.fact,OBJ.fact,M)}
+    ${objRow(ordLbl(h),h.ord,OBJ.ord,v=>nf(v))}
     ${objRow('Inversión Meta',h.invMeta,OBJ.invMeta,M,true,'var(--ke-blue)')}
-    ${objRow('Inversión Google',h.invGoogle,OBJ.invGoogle,M,true,'var(--ke-green)')}
+    ${HAS.google?objRow('Inversión Google',h.invGoogle,OBJ.invGoogle,M,true,'var(--ke-green)'):''}
   </div>`:''}
-  ${secH('Tienda · resumen',h.factSrc==='Tiendanube'?'Facturación real':'Facturación GA4',h.factSrc==='Tiendanube'?{src:L.tiendanube,alt:'Tiendanube'}:null)}
+  ${secH('Tienda · resumen',(h.factSrc==='Tiendanube'||h.factSrc==='Ventas')?'Facturación real':factPill(h,'Facturación GA4'),h.factSrc==='Tiendanube'?{src:L.tiendanube,alt:'Tiendanube'}:null)}
   <div class="kgrid kg4">
-    ${kc('Facturación',M(h.fact),objAll?dpct(h.fact,CTX.all.prev.fact):h.factSrc,1)}
-    ${kc('Ticket promedio',M(h.ticket),objAll?dpct(h.ticket,CTX.all.prev.ticket):'nominal')}
-    ${kc('Tasa de conversión',pc(h.cvr,2),objAll?dpct(h.cvr,CTX.all.prev.cvr):'órdenes / sesiones')}
-    ${kc('Órdenes',nf(h.ord),objAll?dpct(h.ord,CTX.all.prev.ord):'transacciones')}
+    ${kc(factLbl(h),FX(h,M(h.fact)),objAll?dpct(h.fact,CTX.all.prev.fact):(h.factSrc==='Ventas'?'planilla de ventas':h.factSrc),1)}
+    ${kc('Ticket promedio',FX(h,M(h.ticket)),objAll?dpct(h.ticket,CTX.all.prev.ticket):'nominal')}
+    ${kc(isPaidSrc(h)?'Tasa de conversión (paid)':'Tasa de conversión',FX(h,pc(h.cvr,2)),objAll?dpct(h.cvr,CTX.all.prev.cvr):(isPaidSrc(h)?'órdenes / sesiones paid':'órdenes / sesiones'))}
+    ${kc(ordLbl(h),FX(h,nf(h.ord)),objAll?dpct(h.ord,CTX.all.prev.ord):'transacciones')}
   </div>
-  ${secH('Tendencia del evento · facturación por día','Por día')}
-  <div class="chart"><div class="ch"><span class="ct">Facturación por día</span>
+  ${secH('Tendencia del evento · facturación por día',isPaidSrc(h)?'Por día · atribuida a pauta (GA4)':'Por día')}
+  <div class="chart"><div class="ch"><span class="ct">${isPaidSrc(h)?'Facturación atribuida a pauta (GA4) por día':'Facturación por día'}</span>
     <div class="legend"><span><i style="background:#ff700a"></i>Facturación</span><span><i style="background:rgba(230,230,230,.14);border:1px solid rgba(230,230,230,.3)"></i>Objetivo diario</span></div></div>
     <div id="daily"></div></div>
   ${secH('Distribución de sesiones por fuente',nf(h.ses)+' sesiones · GA4')}
@@ -300,26 +361,36 @@ function ovTab(D){
 /* ---- TIENDA ---- */
 function tiTab(D){
   const h=D;
-  const steps=[['Sesiones',h.ses],['Agregaron al carrito',h.atc],['Compraron',h.ord]];
-  const base=h.ses||1;
+  const useEv=h.fnSes>0;
+  const steps=useEv?[['Sesiones',h.fnSes],['Vieron un producto',h.fnView],['Agregaron al carrito',h.fnAtc],['Iniciaron el checkout',h.fnChk],['Compraron',h.fnBuy]]
+                   :[['Sesiones',h.ses],['Agregaron al carrito',h.atc],['Compraron',h.ord]];
+  const base=(useEv?h.fnSes:h.ses)||1;
   const funnelHtml=steps.map((f,i)=>{const w=f[1]/base*100;const drop=i&&steps[i-1][1]?(100-f[1]/steps[i-1][1]*100):0;
     return `<div class="fstep"><div class="fn">${f[0]}<small>${pc(f[1]/base*100,i?1:0)} de las sesiones</small></div>
     <div class="fbar"><i style="width:${Math.max(w,3)}%"></i></div>
     <div class="fr"><b>${nf(f[1])}</b>${i?`<span class="drop">▼ ${nf(drop,0)}% vs paso anterior</span>`:'<span>base del funnel</span>'}</div></div>`;}).join('');
   const objAll=state.day==='all';
-  const atcOk=h.atc>0;
+  const atcOk=useEv||h.atc>0;
+  const its=(h._items||[]).slice().sort((x,y)=>state.itemsSort==='p'?(y.p-x.p)||(y.r-x.r):(y.v-x.v)).slice(0,10);
+  const itRows=its.map((o,i)=>`<tr class="${i===0?'top':''}"><td class="rk">${i+1}</td><td class="nm">${esc(o.n)}</td>
+    <td class="n">${nf(o.v)}</td><td class="n">${nf(o.c)}</td><td class="n">${nf(o.p)}</td><td class="n hi">${o.r?M(o.r):'—'}</td></tr>`).join('');
   return `
-  <div class="bigstat"><div><div class="bl">ACOS general del evento</div><div class="bv">${pc(h.acos)}</div></div>
-    <div class="bd">Inversión total <b style="color:var(--ke-text)">${M(h.inv)}</b> · facturación <b style="color:var(--ke-text)">${M(h.fact)}</b> · ROAS ${nf(h.inv?h.fact/h.inv:0,1)}x.</div></div>
-  ${secH('Comportamiento de la tienda · KPIs',h.factSrc==='Tiendanube'?'Facturación real':'Facturación GA4 / revenue',h.factSrc==='Tiendanube'?{src:L.tiendanube,alt:'Tiendanube'}:null)}
+  <div class="bigstat"><div><div class="bl">ACOS general del evento</div><div class="bv">${FX(h,pc(h.acos))}</div></div>
+    <div class="bd">Inversión total <b style="color:var(--ke-text)">${M(h.inv)}</b> · ${isPaidSrc(h)?'facturación atribuida a pauta (GA4)':'facturación'} <b style="color:var(--ke-text)">${FX(h,M(h.fact))}</b> · ROAS ${FX(h,nf(h.inv?h.fact/h.inv:0,1)+'x')}.</div></div>
+  ${secH('Comportamiento de la tienda · KPIs',(h.factSrc==='Tiendanube'||h.factSrc==='Ventas')?'Facturación real':factPill(h,'Facturación GA4 / revenue'),h.factSrc==='Tiendanube'?{src:L.tiendanube,alt:'Tiendanube'}:null)}
   <div class="kgrid kg4">
-    ${kc('Facturación',M(h.fact),objAll?dpct(h.fact,CTX.all.prev.fact):'',1)}
-    ${kc('Órdenes',nf(h.ord),objAll?dpct(h.ord,CTX.all.prev.ord):'')}
+    ${kc(factLbl(h),FX(h,M(h.fact)),objAll?dpct(h.fact,CTX.all.prev.fact):'',1)}
+    ${kc(ordLbl(h),FX(h,nf(h.ord)),objAll?dpct(h.ord,CTX.all.prev.ord):'')}
     ${kc('Sesiones',nf(h.ses),'Usuarios '+nf(h.usr))}
-    ${kc('Conversión',pc(h.cvr,2),objAll?dpct(h.cvr,CTX.all.prev.cvr):'')}
+    ${kc(isPaidSrc(h)?'Conversión (paid)':'Conversión',FX(h,pc(h.cvr,2)),objAll?dpct(h.cvr,CTX.all.prev.cvr):'')}
   </div>
-  ${atcOk?`${secH('Funnel de la tienda · de la sesión a la compra','GA4 / revenue')}
+  ${atcOk?`${secH('Funnel de la tienda · de la sesión a la compra',useEv?'GA4 · sesiones con cada evento':'GA4 / revenue')}
   <div class="blk" style="padding:20px 22px"><div class="funnel">${funnelHtml}</div></div>`:''}
+  ${its.length?`${secH('Productos más vistos','GA4 · ítems')}
+  <div class="postsel"><span>Ordenar por</span>${[['v','Vistas'],['p','Compras']].map(x=>`<button class="pbtn ${state.itemsSort===x[0]?'on':''}" data-isort="${x[0]}">${x[1]}</button>`).join('')}</div>
+  <div class="blk"><div class="blkh"><span class="blkt">Top 10 productos por ${state.itemsSort==='p'?'compras':'vistas'}</span><span class="blkt">GA4</span></div>
+    <div class="scroll"><table class="t"><thead><tr><th>#</th><th>Producto</th><th class="n">Vistas</th><th class="n">Al carrito</th><th class="n">Compras</th><th class="n">Facturación</th></tr></thead>
+    <tbody>${itRows}</tbody></table></div></div>`:''}
   ${secH('Distribución de sesiones por fuente',nf(h.ses)+' sesiones · GA4')}
   ${srcBars(h)}`;
 }
@@ -329,13 +400,13 @@ function paTab(D){
   const h=D;
   const objAll=state.day==='all';
   const mt=[['Monto invertido',M(h.invMeta)],['Costo por compra',M(h.cpaMeta)],['Facturación (atrib.)',M(h.factMeta)],['ACOS Meta',pc(h.acosMeta)],['CPM',M(h.cpmMeta)]];
-  const mt2=[['CTR',pc(h.ctrM,2)],['Hook rate',pc(h.hookM)],['Frecuencia',nf(h.freqM,1)],['Costo/visita',M(h.cvM)],['CR (conv.)',pc(h.crM,2)]];
+  const mt2=[['CTR',pc(h.ctrM,2)],['Hook rate',h.v3Ok?pc(h.hookM):'—'],['Frecuencia',nf(h.freqM,1)],['Costo/visita',M(h.cvM)],['CR (conv.)',pc(h.crM,2)]];
   const gg=[['Monto invertido',M(h.invGoogle)],['Costo por compra',h.ordGoogle?M(h.cpaGoogle):'—'],['Facturación (atrib.)',h.factGoogle?M(h.factGoogle):'—'],['ACOS Google',h.factGoogle?pc(h.acosGoogle):'—'],['CPC',M(h.cpcGoogle)]];
   const gg2=[['Impresiones',nf(h.imprG)],['CTR',pc(h.ctrG,2)],['Impression share',h.isG?pc(h.isG,0):'—']];
   // ADS: por campaña (agrupadas)
   const camps={};
   (h._rowsMeta||[]).forEach(r=>{const k=r.campaign_name||'(sin nombre)';const c=camps[k]||(camps[k]={n:k,impr:0,sp:0,val:0,comp:0,ctrw:0});
-    c.impr+=+r.impressions||0;c.sp+=+r.amount_spent||0;c.val+=+r.purchases_conv_value||0;c.comp+=+r.website_purchases||0;c.ctrw+=(+r.ctr||0)*(+r.impressions||0);});
+    c.impr+=+r.impressions||0;c.sp+=+r.amount_spent||0;c.val+=+r.purchases_conv_value||0;c.comp+=+r.website_purchases||0;c.ctrw+=ctrOf(r)*(+r.impressions||0);});
   const adArr=Object.values(camps).map(c=>({...c,ctr:c.impr?c.ctrw/c.impr:0,acos:c.val?c.sp/c.val*100:0})).sort((a,b)=>b.val-a.val).slice(0,6);
   const adHtml=adArr.map((a,i)=>`<div class="ad ${i===0?'top':''}"><div class="adh"><div class="adn">${i+1}</div>
     <div class="adt"><b>${a.n}</b><span>Meta Ads · campaña</span></div>${i===0?'<span class="chip c-acc">Top por valor de compras</span>':''}</div>
@@ -348,15 +419,15 @@ function paTab(D){
     </div></div>`).join('');
   return `
   <div class="bigstat"><div><div class="bl">ACOS general · Paid</div><div class="bv">${pc(h.fact?(h.invMeta+h.invGoogle)/h.fact*100:0)}</div></div>
-    <div class="bd">Meta + Google. Inversión <b style="color:var(--ke-text)">${M(h.invMeta+h.invGoogle)}</b> · facturación atribuida <b style="color:var(--ke-text)">${M(h.factMeta+h.factGoogle)}</b> · ROAS ${nf((h.invMeta+h.invGoogle)?(h.factMeta+h.factGoogle)/(h.invMeta+h.invGoogle):0,1)}x.</div></div>
-  ${objAll&&(OBJ.invMeta||OBJ.invGoogle)?`${secH('Avance de inversión','Presupuesto consumido vs. objetivo')}
-  <div class="obj">${objRow('Inversión Meta',h.invMeta,OBJ.invMeta,M,true,'var(--ke-blue)')}${objRow('Inversión Google',h.invGoogle,OBJ.invGoogle,M,true,'var(--ke-green)')}</div>`:''}
+    <div class="bd">${HAS.google?'Meta + Google':'Meta'}. Inversión <b style="color:var(--ke-text)">${M(h.invMeta+h.invGoogle)}</b> · facturación atribuida <b style="color:var(--ke-text)">${M(h.factMeta+h.factGoogle)}</b> · ROAS ${nf((h.invMeta+h.invGoogle)?(h.factMeta+h.factGoogle)/(h.invMeta+h.invGoogle):0,1)}x.</div></div>
+  ${objAll&&(OBJ.invMeta||(HAS.google&&OBJ.invGoogle))?`${secH('Avance de inversión','Presupuesto consumido vs. objetivo')}
+  <div class="obj">${objRow('Inversión Meta',h.invMeta,OBJ.invMeta,M,true,'var(--ke-blue)')}${HAS.google?objRow('Inversión Google',h.invGoogle,OBJ.invGoogle,M,true,'var(--ke-green)'):''}</div>`:''}
   ${secH('Inversión · Meta Ads','',{src:L.meta,alt:'Meta',st:'height:15px'})}
   <div class="kgrid kg5">${mt.map(x=>kc(x[0],x[1],'')).join('')}</div>
   <div class="kgrid kg5">${mt2.map(x=>kc(x[0],x[1],'')).join('')}</div>
-  ${secH('Inversión · Google Ads','',{src:L.google,alt:'Google Ads',st:'height:18px'})}
+  ${HAS.google?`${secH('Inversión · Google Ads','',{src:L.google,alt:'Google Ads',st:'height:18px'})}
   <div class="kgrid kg5">${gg.map(x=>kc(x[0],x[1],'')).join('')}</div>
-  <div class="kgrid kg3">${gg2.map(x=>kc(x[0],x[1],'')).join('')}</div>
+  <div class="kgrid kg3">${gg2.map(x=>kc(x[0],x[1],'')).join('')}</div>`:''}
   ${adArr.length?`${secH('Mejores campañas · Meta Ads','Ranking por valor de compras')}
   <div class="ads">${adHtml}</div>`:''}
   ${HAS.paidInsights?areaSprint('paid','Paid Media'):''}`;
@@ -387,6 +458,34 @@ function coTab(D){
     <div class="scroll"><table class="t"><thead><tr><th>#</th><th>Campaña</th><th class="n">Impr.</th><th class="n">Clicks</th><th class="n">Unidades</th><th class="n">ACOS</th><th class="n">Fact. atrib.</th></tr></thead>
     <tbody>${campRows}</tbody></table></div></div>`:''}
   ${HAS.consulInsights?areaSprint('consul','Consultoría'):''}`;
+}
+
+/* ---- EMAIL ---- */
+function emTab(D){
+  const h=D;
+  const mpct=h.fact?h.mailFact/h.fact*100:0;
+  const camps=(h._rowsEm||[]).slice().sort((a,b)=>(+b.conversions_amount||0)-(+a.conversions_amount||0));
+  const rows=camps.map((c,i)=>{const del=+c.delivered||0;return `<tr class="${i===0?'top':''}"><td class="rk">${i+1}</td><td class="nm">${esc(c.campaign_name||'(campaña)')}</td>
+    <td class="n">${fmtD(c.date)}</td><td class="n">${nf(c.sent)}</td><td class="n">${del?pc((+c.opened||0)/del*100):'—'}</td><td class="n">${del?pc((+c.clicked||0)/del*100):'—'}</td><td class="n">${nf(c.conversions)}</td><td class="n hi">${M(c.conversions_amount)}</td></tr>`;}).join('');
+  return `
+  ${secH('Email marketing · Perfit',nf(h.mailEnv)+(h.mailEnv===1?' campaña':' campañas'))}
+  <div class="kgrid kg4">
+    ${kc('Fact. atribuida',M(h.mailFact),h.fact?pc(mpct)+' de la tienda':'Atribuida por Perfit',1)}
+    ${kc('Open rate',pc(h.mailOr),'CTR '+pc(h.mailCtr))}
+    ${kc('Campañas enviadas',nf(h.mailEnv),state.day==='all'?'En el evento':'En el día')}
+    ${kc('Envíos',nf(h.mailSent),nf(h.mailDel)+' entregados')}
+  </div>
+  <div class="kgrid kg4">
+    ${kc('CTOR',pc(h.mailCtor),'Clicks sobre aperturas')}
+    ${kc('Órdenes por email',nf(h.mailOrd),'Atribuidas')}
+    ${kc('Desuscriptos',pc(h.mailUnsub,2),'Sobre entregados')}
+    ${kc('Rebote',pc(h.mailBounce,2),'Sobre enviados')}
+  </div>
+  ${camps.length?`${secH('Campañas del evento','Por facturación atribuida')}
+  <div class="blk"><div class="blkh"><span class="blkt">Envíos por performance</span><span class="blkt">Perfit</span></div>
+    <div class="scroll"><table class="t"><thead><tr><th>#</th><th>Campaña</th><th class="n">Fecha</th><th class="n">Envíos</th><th class="n">Open rate</th><th class="n">CTR</th><th class="n">Órdenes</th><th class="n">Fact. atrib.</th></tr></thead>
+    <tbody>${rows}</tbody></table></div></div>`:''}
+  ${HAS.emailInsights?areaSprint('email','Email'):''}`;
 }
 
 /* ---- SOCIAL ---- */
@@ -445,13 +544,14 @@ function spTab(D){
   const intro=`<div class="note"><div class="ni">i</div><p>El <strong>sprint review</strong> resume el estatus, los accionables y el impacto esperado por <strong>área</strong> (Paid Media, Consultoría, Email) a lo largo de las últimas semanas. Se alimenta del tablero de Notion del equipo.</p></div>`;
   return intro+(body||'<div class="empty"><p>Sin registros de sprint review.</p></div>');
 }
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 function txt(s){return s&&String(s).trim().length>0;}
 function clean(s){return String(s).trim().replace(/\n{2,}/g,'<br>').replace(/\n/g,' ');}
 function fmtSem(s){if(!s)return '—';const d=parseISO(String(s).slice(0,10));if(isNaN(d))return s;return d.getDate()+'/'+(d.getMonth()+1);}
 
 /* ---- area sprint (dentro de paid/meli) ---- */
 function areaSprint(key,areaMatch){
-  const re=key==='consul'?/consul/i:/paid/i;
+  const re=key==='consul'?/consul/i:key==='email'?/mail/i:/paid/i;
   const items=(DATA.ins||[]).filter(r=>re.test(r.area||'')&&(txt(r.estatus)||txt(r.resumen))).sort((a,b)=>String(b.semana).localeCompare(String(a.semana))).slice(0,2);
   if(!items.length)return '';
   return secH('Sprint review del área · últimas semanas','Accionables')+
@@ -505,10 +605,11 @@ function drawDaily(box){
 document.addEventListener('click',e=>{
   const tb=e.target.closest('.tab'); if(tb){state.tab=tb.dataset.tab;render();window.scrollTo({top:0,behavior:'smooth'});return;}
   const dp=e.target.closest('.daypill'); if(dp){state.day=dp.dataset.day;render();return;}
-  const pb=e.target.closest('.pbtn'); if(pb){if(pb.dataset.posts)state.postsN=+pb.dataset.posts;else if(pb.dataset.filter)state.postsFilter=pb.dataset.filter;render();return;}
+  const pb=e.target.closest('.pbtn'); if(pb){if(pb.dataset.posts)state.postsN=+pb.dataset.posts;else if(pb.dataset.filter)state.postsFilter=pb.dataset.filter;else if(pb.dataset.isort)state.itemsSort=pb.dataset.isort;render();return;}
 });
 
 /* live label */
 (function(){const el=document.getElementById('liveTs');if(!el)return;let s=55*60;setInterval(()=>{s=s<=0?3600:s-1;const m=Math.ceil(s/60);el.textContent='en vivo · '+m+' min';},1000);})();
 
 boot();
+

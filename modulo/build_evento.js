@@ -5,6 +5,7 @@ const MOD=process.argv[3];          // event_module.js
 const OUT=process.argv[4];          // output index.html
 const PREFIX=process.argv[5];
 const CLIENTE_KEY=process.argv[6];
+const GA4_PAID_ONLY=process.argv[7]==='true';  // opcional: sellers sin Tiendanube ni planilla de ventas (fact = GA4 atribuida a pauta)
 
 let s=fs.readFileSync(SRC,'utf8');
 
@@ -40,7 +41,7 @@ shell=shell.replace(
 
 // --- módulo ---
 let mod=fs.readFileSync(MOD,'utf8');
-mod=mod.replace('__PREFIX__',PREFIX).replace('__CLIENTE_KEY__',CLIENTE_KEY);
+mod=mod.replace('__PREFIX__',PREFIX).replace('__CLIENTE_KEY__',CLIENTE_KEY).replace('__GA4_PAID_ONLY__',String(GA4_PAID_ONLY));
 const Ljs='const L='+JSON.stringify(L)+';\n';
 
 const outHtml=shell+'<script>\n'+Ljs+mod+'\n</script>'+tail;
