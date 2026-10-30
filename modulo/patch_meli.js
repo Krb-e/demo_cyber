@@ -5,8 +5,9 @@ const f=process.argv[2]; if(!f){console.error('falta la ruta');process.exit(1);}
 let s=fs.readFileSync(f,'utf8');
 const crlf=s.includes('\r\n'); if(crlf)s=s.replace(/\r\n/g,'\n');
 if(s.includes('/* ============ MERCADO LIBRE (pieza reutilizable')){console.error('ya aplicado');process.exit(1);}
-const js=fs.readFileSync(path.join(__dirname,'meli_tab.js'),'utf8').trim();
-const css=fs.readFileSync(path.join(__dirname,'meli_tab.css'),'utf8').trim();
+// sin \r: si la pieza viene en CRLF y el build también, el paso final a CRLF deja \r\r\n y git ve el archivo como binario
+const js=fs.readFileSync(path.join(__dirname,'meli_tab.js'),'utf8').replace(/\r/g,'').trim();
+const css=fs.readFileSync(path.join(__dirname,'meli_tab.css'),'utf8').replace(/\r/g,'').trim();
 function rep(re,to,what){const n=(s.match(new RegExp(re.source,re.flags.includes('g')?re.flags:re.flags+'g'))||[]).length;
   if(n!==1)throw new Error(what+': '+n+' coincidencias'); s=s.replace(re,to);}
 
