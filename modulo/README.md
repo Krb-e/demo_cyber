@@ -5,11 +5,13 @@ Tablero de evento reutilizable para los sellers de la agencia. Se sirve en `{cli
 ## Archivos
 - `event_module.js` — la SPA del evento (config-driven). Las constantes por cliente las pone el build: `PREFIX` (prefijo de tablas Supabase), `CLIENTE_KEY` (match con `eventos.cliente`; también es el nombre visible) y `GA4_PAID_ONLY` (opcional).
 - `build_evento.js` — ensambla `event_module.js` + los logos base64 del `index.html` del demo en un `evento/index.html` autocontenido.
+- `meli_tab.js` + `meli_tab.css` + `patch_meli.js` — pestaña **Mercado Libre** completa (pieza aparte). Se aplica sobre un `evento/index.html` ya armado: `node modulo/patch_meli.js <salida>/evento/index.html`. Reemplaza la pestaña MeLi básica del módulo y suma el bloque MeLi aparte en el Overview. Probada sobre el build del molde (Ohpic) y sobre los builds vivos de Regina, Colombraro y Mi Pañal.
 
 ## Cómo generar el /evento de un cliente
 ```bash
 # desde la raíz de este repo (demo_cyber), que tiene el index.html del molde:
 node modulo/build_evento.js index.html modulo/event_module.js <salida>/evento/index.html <PREFIX> "<CLIENTE_KEY>" [true|false]
+node modulo/patch_meli.js <salida>/evento/index.html   # si el seller tiene Mercado Libre
 # el último arg es GA4_PAID_ONLY (default false): true sólo para sellers sin Tiendanube ni planilla de ventas (p. ej. Famusic)
 # ej Wanama:  node modulo/build_evento.js index.html modulo/event_module.js ../wanamakids/evento/index.html wanamakids "wanama kids"
 ```
@@ -21,7 +23,9 @@ Una fila por cliente. Columnas: `cliente, nombre, badge_texto, fecha_inicio, fec
 ## Fuentes de datos por tab
 - **Overview / Tienda**: facturación real de `{prefix}_tiendanube_orders` (order_total_paid, status paid + partially_refunded); si no hay, `{prefix}_facturacion` (planilla diaria venta_real/pedidos, días sin cargar en "—"); si no, GA4/`{prefix}_revenue` (con `GA4_PAID_ONLY`, sólo lo atribuido a pauta). Sesiones/fuentes de GA4; funnel y productos de `{prefix}_ga4_events` / `_ga4_items` si existen.
 - **Paid Media**: `{prefix}_meta_ads` + `{prefix}_google_ads` (ambas con `select=*`; atribución Google/cpc desde el store por source_medium). Si no hay filas de Google en la ventana, todo lo de Google se oculta y el ACOS/avance queda sólo con Meta.
-- **Mercado Libre**: `{prefix}_ml_orders` (aprobadas) + `{prefix}_mercado_ads`.
+- **Mercado Libre** (con `patch_meli.js`): `{prefix}_ml_orders` (pago aprobado: bruta, órdenes, ticket, unidades, comisión, envío, cupones, neta; canceladas aparte), `{prefix}_mercado_ads` (Product Ads) + `{prefix}_mercado_ads_display` (Display, atribución por touch point directo; se piden sólo filas con costo, impresiones o venta), `{prefix}_ml_items` (top 10 por unidades vendidas del último snapshot; no depende del día) y `{prefix}_ml_cuenta` (reputación). Objetivos de `objetivos_ml` con `fecha='cyber-monday-2026'` si hay. Paginación con desempate por clave natural (order_id / campaign_id / line_item_id), así anda en tablas sin `id`. El Overview muestra MeLi **aparte** ("canal aparte, no suma a la facturación de la tienda") con la suma tienda + MeLi rotulada.
+  - Sin visitas ni conversión a propósito: `{prefix}_ml_visitas_snapshot` no es un acumulado (baja entre días y la resta da conversiones de 30% a más de 100%) e `item_visits` tampoco cierra (publicaciones top con 0 visitas). Además anon no puede leer `_ml_visitas_snapshot`.
+  - Sellers sólo MeLi (Ohpic, Prifamon, Superclick): la pestaña funciona sola; Overview y Tienda siguen pensados para tienda propia.
 - **Email Mkt**: `{prefix}_email_marketing` (Perfit); la pestaña aparece sólo si hubo envíos en la ventana del evento.
 - **Social**: `{prefix}_ig_posts_media` + `{prefix}_ig_stories` (como Historias) / `_ig_account_daily`.
 - **Sprint Review**: `{prefix}_insights` (Notion), por semana y área; las filas sin `semana` no entran.
