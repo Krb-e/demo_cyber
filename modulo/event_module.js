@@ -119,8 +119,9 @@ async function loadData(){
       // GA4 detallado (no todos los sellers lo tienen: si la tabla falta da 404 y el funnel cae a revenue/add_to_carts)
       sb(T('ga4_events'),'date,event_name,sessions','date',pFrom,E_cur),
       sb(T('ga4_items'),'date,item_name,items_viewed,items_added_to_cart,items_purchased,item_revenue','date',S_cur,E_cur),
-      // email marketing (campañas): si la tabla falta o no hay envíos en el evento, la pestaña Email se oculta
-      sb(T('email_marketing'),'date,campaign_name,sent,delivered,opened,clicked,bounced,unsubscribed,conversions,conversions_amount','date',pFrom,E_cur),
+      // email marketing (campañas): si la tabla falta o no hay envíos en el evento, la pestaña Email se oculta.
+      // * : campaign_subject (asunto) no lo tienen todos los sellers
+      sb(T('email_marketing'),'*','date',pFrom,E_cur),
       // facturación diaria propia (sellers sin Tiendanube con planilla de ventas): si la tabla falta da 404 y se ignora
       sb(T('facturacion'),'date,venta_real,pedidos','date',pFrom,E_cur)
     ]);
@@ -465,7 +466,8 @@ function emTab(D){
   const h=D;
   const mpct=h.fact?h.mailFact/h.fact*100:0;
   const camps=(h._rowsEm||[]).slice().sort((a,b)=>(+b.conversions_amount||0)-(+a.conversions_amount||0));
-  const rows=camps.map((c,i)=>{const del=+c.delivered||0;return `<tr class="${i===0?'top':''}"><td class="rk">${i+1}</td><td class="nm">${esc(c.campaign_name||'(campaña)')}</td>
+  const rows=camps.map((c,i)=>{const del=+c.delivered||0;const subj=String(c.campaign_subject||'').replace(/^asunto:\s*/i,'');
+    return `<tr class="${i===0?'top':''}"><td class="rk">${i+1}</td><td class="nm">${esc(c.campaign_name||'(campaña)')}${subj?`<div style="opacity:.6;font-size:11px;margin-top:2px">${esc(subj)}</div>`:''}</td>
     <td class="n">${fmtD(c.date)}</td><td class="n">${nf(c.sent)}</td><td class="n">${del?pc((+c.opened||0)/del*100):'—'}</td><td class="n">${del?pc((+c.clicked||0)/del*100):'—'}</td><td class="n">${nf(c.conversions)}</td><td class="n hi">${M(c.conversions_amount)}</td></tr>`;}).join('');
   return `
   ${secH('Email marketing · Perfit',nf(h.mailEnv)+(h.mailEnv===1?' campaña':' campañas'))}
